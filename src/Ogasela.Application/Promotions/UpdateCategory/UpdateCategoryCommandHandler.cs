@@ -77,6 +77,21 @@ public sealed class UpdateCategoryCommandHandler : IRequestHandler<UpdateCategor
 
         category.Update(request.Name, request.ParentCategoryId, request.IsFreeEligible, request.AttributeSchemaVersion, now);
 
+        // Ads are posted under a subcategory, and RULE-04 (ListingPublishService) reads the
+        // subcategory's own flag - so a top-level category's Free-plan setting only takes effect
+        // once its subcategories carry it too, the same way they inherit it at creation.
+        if (category.ParentCategoryId is null)
+        {
+            var subcategories = await _dbContext.Categories
+                .Where(c => c.ParentCategoryId == category.Id && c.IsFreeEligible != request.IsFreeEligible)
+                .ToListAsync(cancellationToken);
+            foreach (var subcategory in subcategories)
+            {
+                subcategory.Update(subcategory.Name, subcategory.ParentCategoryId, request.IsFreeEligible,
+                    subcategory.AttributeSchemaVersion, now);
+            }
+        }
+
         var afterJson = JsonSerializer.Serialize(category);
 
         await _auditLogger.LogAsync(
