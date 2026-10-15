@@ -194,7 +194,7 @@ public static class DependencyInjection
         services.AddScoped<IPriceSuggestionService, ListingDataPriceSuggestionService>();
         services.AddScoped<IFraudRiskScorer, HeuristicFraudRiskScorer>();
         services.AddScoped<IAiImageStorage, S3AiImageStorage>();
-        services.AddScoped<IImageEnhancer, ImageSharpEnhancer>();
+        services.AddScoped<IImageEnhancer, SkiaImageEnhancer>();
     }
 
     private static void AddPaymentGateways(IServiceCollection services, IConfiguration configuration)
@@ -248,7 +248,7 @@ public static class DependencyInjection
             services.AddSingleton<IListingImageStorage, InMemoryListingImageStorage>();
         }
 
-        services.AddScoped<IListingImageProcessor, ImageSharpListingImageProcessor>();
+        services.AddScoped<IListingImageProcessor, SkiaListingImageProcessor>();
         services.AddScoped<IBiometricDataErasureService, BiometricDataErasureService>();
         services.AddScoped<RawImageExpiryJob>();
 
