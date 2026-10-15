@@ -58,11 +58,11 @@ public sealed class ImageSharpListingImageProcessor : IListingImageProcessor
 
         image.Mutate(ctx => ctx
             .AutoOrient()
-            .DrawText(
+            .Paint(canvas => canvas.DrawText(
                 textOptions,
                 watermarkText,
                 Brushes.Solid(Color.White.WithAlpha(0.85f)),
-                Pens.Solid(Color.Black.WithAlpha(0.6f), 1.5f)));
+                Pens.Solid(Color.Black.WithAlpha(0.6f), 1.5f))));
 
         var output = await EncodeAtOrBelowTargetSizeAsync(image, originalSizeBytes, cancellationToken);
         return new ProcessedListingImage(output, "image/jpeg", ".jpg");
