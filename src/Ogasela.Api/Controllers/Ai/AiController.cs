@@ -39,7 +39,7 @@ public sealed class AiController : ControllerBase
         return result.ToActionResult(this);
     }
 
-    /// <summary>Runs a real (non-AI) image enhancement pass (ImageSharp: brightness/contrast/sharpen) on an uploaded photo and returns the processed image's storage reference. multipart/form-data, up to 20MB.</summary>
+    /// <summary>Runs a real (non-AI) image enhancement pass (SkiaSharp: auto-orient, crop to subject, brightness/contrast) on an uploaded photo and returns the processed image's storage reference. multipart/form-data, up to 20MB.</summary>
     [HttpPost("api/v1/ai/enhance-image")]
     [RequestSizeLimit(20_000_000)]
     public async Task<IActionResult> EnhanceImage([FromForm] EnhanceImageRequest request, CancellationToken cancellationToken)
