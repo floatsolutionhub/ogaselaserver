@@ -26,6 +26,10 @@ public class MasterOtpEnvironmentTests : IClassFixture<AccountsApiFactory>
         {
             builder.UseEnvironment(environment);
             builder.UseSetting("Otp:MasterCode", MasterCode);
+
+            // Production skips appsettings.Development.json (and CI has no .env), so supply a
+            // throwaway signing key or Program.cs refuses to start.
+            builder.UseSetting("Jwt:Secret", "test-only-signing-key-not-used-anywhere-real-0123456789");
         });
 
         var settings = app.Services.GetRequiredService<IOptions<OtpSettings>>().Value;
