@@ -59,7 +59,8 @@ public sealed record AdminSellerSummary(
     string BusinessName,
     string? StoreAddress,
     string VerificationStatus,
-    DateTime? VerifiedAt);
+    DateTime? VerifiedAt,
+    DateTime? BusinessVerifiedAt);
 
 public sealed record AdminUserStats(
     int TotalAds,
@@ -236,7 +237,7 @@ public sealed class AdminUserQueryHandlers :
             socialLogins,
             seller is null
                 ? null
-                : new AdminSellerSummary(seller.Id, seller.BusinessName, seller.StoreAddress, seller.VerificationStatus.ToString(), seller.VerifiedAt),
+                : new AdminSellerSummary(seller.Id, seller.BusinessName, seller.StoreAddress, seller.VerificationStatus.ToString(), seller.VerifiedAt, seller.BusinessVerifiedAt),
             new AdminUserStats(totalAds, liveAds, pendingAds, reviewCount, Math.Round(averageRating, 2), openReports, conversations, activeSessions),
             documents.Select(d => new AdminUserDocument(
                 d.Id, d.Type, d.IdType, d.IdNumber, d.FileName, d.ContentType,
@@ -257,12 +258,26 @@ public static class AdminUserErrors
 
     public static readonly Error DocumentAlreadyReviewed = new("AdminUsers.DocumentAlreadyReviewed", "This document has already been reviewed.");
 
-    public static readonly Error NotASeller = new("AdminUsers.NotASeller", "Only seller accounts can be verified.");
+    public static readonly Error NotASeller = new("AdminUsers.NotASeller", "Only buyer and seller accounts can be verified.");
+
+    public static readonly Error NoSellerProfile = new(
+        "AdminUsers.NoSellerProfile", "This account has no business to verify yet - verify the person first.");
+
+    public static readonly Error PersonNotVerified = new(
+        "AdminUsers.PersonNotVerified", "Verify the person before their business.");
+
+    public static readonly Error BusinessAlreadyVerified = new("AdminUsers.BusinessAlreadyVerified", "This business is already verified.");
+
+    public static readonly Error BusinessNotVerified = new("AdminUsers.BusinessNotVerified", "This business isn't verified.");
+
+    public static readonly Error BusinessNotReadyToVerify = new(
+        "AdminUsers.BusinessNotReadyToVerify",
+        "A business needs an approved registration document and an approved proof of office address before it can be verified.");
 
     public static readonly Error AlreadyVerified = new("AdminUsers.AlreadyVerified", "This seller is already verified.");
 
     public static readonly Error NotVerified = new("AdminUsers.NotVerified", "This seller isn't verified.");
 
     public static readonly Error NotReadyToVerify = new(
-        "AdminUsers.NotReadyToVerify", "A seller needs an approved ID card and a face photo before they can be verified.");
+        "AdminUsers.NotReadyToVerify", "Someone needs a face photo, an approved ID card and an approved utility bill before they can be verified.");
 }

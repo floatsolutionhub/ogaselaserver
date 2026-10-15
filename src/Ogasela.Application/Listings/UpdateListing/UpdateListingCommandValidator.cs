@@ -23,5 +23,10 @@ public sealed class UpdateListingCommandValidator : AbstractValidator<UpdateList
             .WithMessage($"A listing can have at most {Listing.MaxPhotoCount} photos.")
             .When(x => x.MediaUrls is not null);
         RuleForEach(x => x.MediaUrls).NotEmpty();
+
+        RuleFor(x => x.TikTokUrl).Must(ListingSocialLinks.IsTikTok).WithMessage(ListingSocialLinks.Message("TikTok"));
+        RuleFor(x => x.FacebookUrl).Must(ListingSocialLinks.IsFacebook).WithMessage(ListingSocialLinks.Message("Facebook"));
+        RuleFor(x => x.InstagramUrl).Must(ListingSocialLinks.IsInstagram).WithMessage(ListingSocialLinks.Message("Instagram"));
+        RuleFor(x => x.YouTubeUrl).Must(ListingSocialLinks.IsYouTube).WithMessage(ListingSocialLinks.Message("YouTube"));
     }
 }

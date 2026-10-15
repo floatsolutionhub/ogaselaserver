@@ -7,6 +7,8 @@ using Ogasela.Api.Contracts.Messaging;
 using Ogasela.Api.RateLimiting;
 using Ogasela.Application.Messaging.GetConversations;
 using Ogasela.Application.Messaging.GetMessages;
+using Ogasela.Application.Messaging.GetSafetyNotice;
+using Ogasela.Application.Messaging.GetUnreadMessageCount;
 using Ogasela.Application.Messaging.SendMessage;
 using Ogasela.Application.Messaging.StartConversation;
 
@@ -40,6 +42,16 @@ public sealed class ConversationsController : ControllerBase
         var result = await _sender.Send(query, cancellationToken);
         return result.ToActionResult(this);
     }
+
+    /// <summary>The safety caption shown above the message box in every chat (SuperAdmin-editable).</summary>
+    [HttpGet("api/v1/conversations/safety-notice")]
+    public async Task<IActionResult> GetSafetyNotice(CancellationToken cancellationToken) =>
+        (await _sender.Send(new GetSafetyNoticeQuery(), cancellationToken)).ToActionResult(this);
+
+    /// <summary>Unread messages sent to the caller across all their conversations, for the Messages tab badge.</summary>
+    [HttpGet("api/v1/conversations/unread-count")]
+    public async Task<IActionResult> GetUnreadCount(CancellationToken cancellationToken) =>
+        (await _sender.Send(new GetUnreadMessageCountQuery(), cancellationToken)).ToActionResult(this);
 
     /// <summary>Message history for a conversation the caller is a participant in.</summary>
     [HttpGet("api/v1/conversations/{id:guid}/messages")]

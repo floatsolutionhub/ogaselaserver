@@ -30,7 +30,12 @@ public sealed record ListingDetailResponse(
     Guid? ParentCategoryId,
     string? PromotionPlanName,
     ListingSellerSummary Seller,
-    string? ReviewNote = null);
+    string? ReviewNote = null,
+    bool? HasOriginalReceipt = null,
+    string? TikTokUrl = null,
+    string? FacebookUrl = null,
+    string? InstagramUrl = null,
+    string? YouTubeUrl = null);
 
 /// <summary>
 /// Phone is only filled in for a signed-in caller, so seller numbers can't be scraped
@@ -44,4 +49,5 @@ public sealed record ListingSellerSummary(
     string? Phone,
     string? StoreAddress,
     VerificationStatus VerificationStatus,
-    DateTime MemberSince);
+    DateTime MemberSince,
+    bool IsBusinessVerified = false);

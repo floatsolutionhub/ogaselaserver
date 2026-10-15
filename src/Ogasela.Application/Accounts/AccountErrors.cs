@@ -56,6 +56,12 @@ public static class AccountErrors
         "User.ProfilePhotoRejected",
         $"That photo can't be used{(string.IsNullOrWhiteSpace(reason) ? "" : $" ({reason.ToLowerInvariant()})")}. Face the camera in good light and try again.");
 
+    public static readonly Error VerifiedIdentityLocked = new(
+        "User.VerifiedIdentityLocked", "Your account is verified, so your selfie, ID card and utility bill can no longer be changed.");
+
+    public static readonly Error VerifiedBusinessLocked = new(
+        "User.VerifiedBusinessLocked", "Your business is verified, so its registration and proof of address can no longer be changed.");
+
     public static readonly Error AccountSuspended = new(
         "User.Suspended", "This account has been suspended. Contact support@ogasela.com if you think this is a mistake.");
 }

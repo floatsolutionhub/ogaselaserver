@@ -18,7 +18,8 @@ public sealed record SellerProfileResponse(
     DateTime MemberSince,
     int ActiveAdCount,
     decimal AverageRating,
-    int ReviewCount);
+    int ReviewCount,
+    bool IsBusinessVerified = false);
 
 public sealed class GetSellerProfileQueryHandler : IRequestHandler<GetSellerProfileQuery, Result<SellerProfileResponse>>
 {
@@ -70,6 +71,7 @@ public sealed class GetSellerProfileQueryHandler : IRequestHandler<GetSellerProf
             seller.s.CreatedAt,
             activeAdCount,
             Math.Round(averageRating, 2),
-            reviewCount));
+            reviewCount,
+            seller.s.IsBusinessVerified));
     }
 }

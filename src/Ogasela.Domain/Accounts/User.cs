@@ -89,6 +89,15 @@ public class User
         MustChangePassword = mustChangePassword;
     }
 
+    /// <summary>A buyer becomes a seller once staff verify their identity. No-op for any other role.</summary>
+    public void BecomeSeller()
+    {
+        if (Role == UserRole.Buyer)
+        {
+            Role = UserRole.Seller;
+        }
+    }
+
     /// <summary>
     /// Promotes an existing account to SuperAdmin in place. Used only by SuperAdminSeeder for
     /// the case where its configured seed phone number already belongs to an account (typically

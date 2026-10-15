@@ -23,9 +23,10 @@ public sealed record RevokeUserSessionsCommand(Guid UserId) : IRequest<Result>;
 public sealed record ReviewUserDocumentCommand(Guid UserId, Guid DocumentId, bool Approve, string? Reason) : IRequest<Result>;
 
 /// <summary>
-/// Staff verify a seller by hand after checking their documents and face photo (the interim route
-/// until in-app biometric verification ships), or revoke it. Verified unlocks publishing ads.
-/// Revoking needs a reason the seller sees; their live ads stay up.
+/// Staff verify a person by hand after checking their face photo, ID card and utility bill (the interim
+/// route until in-app biometric verification ships), or revoke it. Verified unlocks publishing ads - a
+/// buyer who's verified becomes a seller. Revoking needs a reason the seller sees; their live ads stay up,
+/// and their business verification goes with it.
 /// </summary>
 public sealed record SetSellerVerificationCommand(Guid UserId, bool Verified, string? Reason) : IRequest<Result>;
 
@@ -35,6 +36,21 @@ public sealed class SetSellerVerificationCommandValidator : AbstractValidator<Se
     {
         When(x => !x.Verified, () =>
             RuleFor(x => x.Reason).NotEmpty().WithMessage("Tell the seller why their verification was revoked.").MaximumLength(500));
+    }
+}
+
+/// <summary>
+/// Staff verify a seller's business once its registration document and proof of office address are
+/// approved and the person is verified - a trust badge on their shop and ads - or revoke it with a reason.
+/// </summary>
+public sealed record SetBusinessVerificationCommand(Guid UserId, bool Verified, string? Reason) : IRequest<Result>;
+
+public sealed class SetBusinessVerificationCommandValidator : AbstractValidator<SetBusinessVerificationCommand>
+{
+    public SetBusinessVerificationCommandValidator()
+    {
+        When(x => !x.Verified, () =>
+            RuleFor(x => x.Reason).NotEmpty().WithMessage("Tell the seller why their business verification was revoked.").MaximumLength(500));
     }
 }
 
@@ -58,7 +74,8 @@ public sealed class AdminUserCommandHandlers :
     IRequestHandler<ReactivateUserCommand, Result>,
     IRequestHandler<RevokeUserSessionsCommand, Result>,
     IRequestHandler<ReviewUserDocumentCommand, Result>,
-    IRequestHandler<SetSellerVerificationCommand, Result>
+    IRequestHandler<SetSellerVerificationCommand, Result>,
+    IRequestHandler<SetBusinessVerificationCommand, Result>
 {
     private static readonly UserRole[] AppRoles = [UserRole.Buyer, UserRole.Seller];
 
@@ -223,15 +240,20 @@ public sealed class AdminUserCommandHandlers :
         return Result.Success();
     }
 
+    private Task<bool> HasApprovedDocumentAsync(Guid userId, UserDocumentType type, CancellationToken cancellationToken) =>
+        _dbContext.UserDocuments.AnyAsync(
+            d => d.UserId == userId && d.Type == type && d.Status == UserDocumentStatus.Approved, cancellationToken);
+
     public async Task<Result> Handle(SetSellerVerificationCommand request, CancellationToken cancellationToken)
     {
-        var seller = await _dbContext.SellerProfiles.FirstOrDefaultAsync(s => s.UserId == request.UserId, cancellationToken);
-        if (seller is null)
+        var user = await FindAppUserAsync(request.UserId, cancellationToken);
+        if (user is null)
         {
             return Result.Failure(AdminUserErrors.NotASeller);
         }
 
-        var before = seller.VerificationStatus;
+        var seller = await _dbContext.SellerProfiles.FirstOrDefaultAsync(s => s.UserId == request.UserId, cancellationToken);
+        var before = seller?.VerificationStatus ?? VerificationStatus.NotStarted;
         if (request.Verified && before == VerificationStatus.Verified)
         {
             return Result.Failure(AdminUserErrors.AlreadyVerified);
@@ -242,17 +264,25 @@ public sealed class AdminUserCommandHandlers :
             return Result.Failure(AdminUserErrors.NotVerified);
         }
 
-        // Staff verify against evidence, never blind: an approved ID card and a face photo to compare it with.
+        // Staff verify against evidence, never blind: a face photo to compare with an approved ID card,
+        // plus an approved proof of address.
         if (request.Verified)
         {
-            var hasFacePhoto = await _dbContext.Users
-                .AnyAsync(u => u.Id == request.UserId && u.ProfilePhotoS3Key != null, cancellationToken);
-            var hasApprovedId = await _dbContext.UserDocuments.AnyAsync(
-                d => d.UserId == request.UserId && d.Type == UserDocumentType.IdCard && d.Status == UserDocumentStatus.Approved,
-                cancellationToken);
-            if (!hasFacePhoto || !hasApprovedId)
+            var ready = user.ProfilePhotoS3Key is not null
+                        && await HasApprovedDocumentAsync(user.Id, UserDocumentType.IdCard, cancellationToken)
+                        && await HasApprovedDocumentAsync(user.Id, UserDocumentType.UtilityBill, cancellationToken);
+            if (!ready)
             {
                 return Result.Failure(AdminUserErrors.NotReadyToVerify);
+            }
+
+            // A verified buyer becomes a seller: they get a shop they can rename from Business Info.
+            if (seller is null)
+            {
+                var name = user.Name?.Trim();
+                seller = SellerProfile.Create(user.Id, string.IsNullOrEmpty(name) ? "My Shop" : name, rcNumber: null, nin: null);
+                _dbContext.SellerProfiles.Add(seller);
+                user.BecomeSeller();
             }
         }
 
@@ -260,11 +290,11 @@ public sealed class AdminUserCommandHandlers :
         var reason = request.Reason?.Trim();
         if (request.Verified)
         {
-            seller.UpdateVerificationStatus(VerificationStatus.Verified, now);
+            seller!.UpdateVerificationStatus(VerificationStatus.Verified, now);
         }
         else
         {
-            seller.UpdateVerificationStatus(VerificationStatus.NotStarted, null);
+            seller!.UpdateVerificationStatus(VerificationStatus.NotStarted, null);
             _dbContext.InboxNotifications.Add(InboxNotification.Create(
                 seller.UserId, InboxNotificationTypes.Verification, "Your seller verification was revoked",
                 $"{reason} Contact support if you think this is a mistake.", null, null, now));
@@ -287,6 +317,65 @@ public sealed class AdminUserCommandHandlers :
                 cancellationToken);
         }
 
+        return Result.Success();
+    }
+
+    public async Task<Result> Handle(SetBusinessVerificationCommand request, CancellationToken cancellationToken)
+    {
+        var seller = await _dbContext.SellerProfiles.FirstOrDefaultAsync(s => s.UserId == request.UserId, cancellationToken);
+        if (seller is null)
+        {
+            return Result.Failure(AdminUserErrors.NoSellerProfile);
+        }
+
+        if (request.Verified)
+        {
+            if (seller.IsBusinessVerified)
+            {
+                return Result.Failure(AdminUserErrors.BusinessAlreadyVerified);
+            }
+
+            if (seller.VerificationStatus != VerificationStatus.Verified)
+            {
+                return Result.Failure(AdminUserErrors.PersonNotVerified);
+            }
+
+            var ready = await HasApprovedDocumentAsync(seller.UserId, UserDocumentType.BusinessRegistration, cancellationToken)
+                        && await HasApprovedDocumentAsync(seller.UserId, UserDocumentType.OfficeUtilityBill, cancellationToken);
+            if (!ready)
+            {
+                return Result.Failure(AdminUserErrors.BusinessNotReadyToVerify);
+            }
+        }
+        else if (!seller.IsBusinessVerified)
+        {
+            return Result.Failure(AdminUserErrors.BusinessNotVerified);
+        }
+
+        var now = _dateTime.UtcNow;
+        var reason = request.Reason?.Trim();
+        if (request.Verified)
+        {
+            seller.VerifyBusiness(now);
+            _dbContext.InboxNotifications.Add(InboxNotification.Create(
+                seller.UserId, InboxNotificationTypes.Verification, "Your business is verified",
+                $"{seller.BusinessName} now shows a verified business badge to buyers.", null, null, now));
+        }
+        else
+        {
+            seller.RevokeBusinessVerification();
+            _dbContext.InboxNotifications.Add(InboxNotification.Create(
+                seller.UserId, InboxNotificationTypes.Verification, "Your business verification was revoked",
+                $"{reason} Contact support if you think this is a mistake.", null, null, now));
+        }
+
+        await _auditLogger.LogAsync(
+            _currentUser.UserId!.Value, request.Verified ? "Seller.BusinessVerifiedByStaff" : "Seller.BusinessVerificationRevoked",
+            nameof(SellerProfile), seller.Id,
+            null,
+            JsonSerializer.Serialize(new { BusinessVerified = seller.IsBusinessVerified, Reason = reason }),
+            cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }
 }

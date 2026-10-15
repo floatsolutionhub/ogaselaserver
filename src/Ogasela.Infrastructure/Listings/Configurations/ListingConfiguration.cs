@@ -23,6 +23,10 @@ public sealed class ListingConfiguration : IEntityTypeConfiguration<Listing>
         builder.Property(l => l.Longitude).HasPrecision(9, 6);
         builder.Property(l => l.CreatedAt).IsRequired();
         builder.Property(l => l.UpdatedAt).IsRequired();
+        builder.Property(l => l.TikTokUrl).HasMaxLength(Listing.SocialLinkMaxLength);
+        builder.Property(l => l.FacebookUrl).HasMaxLength(Listing.SocialLinkMaxLength);
+        builder.Property(l => l.InstagramUrl).HasMaxLength(Listing.SocialLinkMaxLength);
+        builder.Property(l => l.YouTubeUrl).HasMaxLength(Listing.SocialLinkMaxLength);
 
         builder.PrimitiveCollection(l => l.MediaUrls);
 

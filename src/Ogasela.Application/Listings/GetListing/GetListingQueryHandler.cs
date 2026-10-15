@@ -69,7 +69,8 @@ public sealed class GetListingQueryHandler : IRequestHandler<GetListingQuery, Re
             _currentUser.UserId is null ? null : seller.user.Phone,
             seller.sellerProfile.StoreAddress,
             seller.sellerProfile.VerificationStatus,
-            seller.sellerProfile.CreatedAt);
+            seller.sellerProfile.CreatedAt,
+            seller.sellerProfile.IsBusinessVerified);
 
         // A seller opening their own ad isn't a view.
         if (_currentUser.UserId != seller.user.Id)
@@ -99,7 +100,12 @@ public sealed class GetListingQueryHandler : IRequestHandler<GetListingQuery, Re
             category?.ParentCategoryId,
             planName?.ToString(),
             sellerSummary,
-            listing.ReviewNote));
+            listing.ReviewNote,
+            listing.HasOriginalReceipt,
+            listing.TikTokUrl,
+            listing.FacebookUrl,
+            listing.InstagramUrl,
+            listing.YouTubeUrl));
     }
 
     private async Task<bool> IsOwnerAsync(Listing listing, CancellationToken cancellationToken)

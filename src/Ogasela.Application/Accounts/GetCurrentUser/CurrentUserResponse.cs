@@ -23,7 +23,8 @@ public sealed record SellerProfileResponse(
     string? Nin,
     VerificationStatus VerificationStatus,
     DateTime? VerifiedAt,
-    string? StoreAddress = null);
+    string? StoreAddress = null,
+    DateTime? BusinessVerifiedAt = null);
 
 /// <summary>
 /// Lets the frontend gate routes by permission/roleType and show a force-password-change screen

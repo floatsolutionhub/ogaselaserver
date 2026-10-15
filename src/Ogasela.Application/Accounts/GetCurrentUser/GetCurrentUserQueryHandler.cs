@@ -50,7 +50,8 @@ public sealed class GetCurrentUserQueryHandler : IRequestHandler<GetCurrentUserQ
                     sellerProfile.Nin,
                     sellerProfile.VerificationStatus,
                     sellerProfile.VerifiedAt,
-                    sellerProfile.StoreAddress);
+                    sellerProfile.StoreAddress,
+                    sellerProfile.BusinessVerifiedAt);
             }
         }
 

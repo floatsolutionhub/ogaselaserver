@@ -23,6 +23,12 @@ public class SellerProfile
 
     public DateTime? VerifiedAt { get; private set; }
 
+    /// <summary>When staff verified the business (registration + proof of office address); null if it isn't.
+    /// A trust badge on top of personal verification - selling only needs <see cref="VerificationStatus"/>.</summary>
+    public DateTime? BusinessVerifiedAt { get; private set; }
+
+    public bool IsBusinessVerified => BusinessVerifiedAt is not null;
+
     public DateTime CreatedAt { get; private set; }
 
     public static SellerProfile Create(Guid userId, string businessName, string? rcNumber, string? nin)
@@ -56,7 +62,17 @@ public class SellerProfile
 
         // VerifiedAt only describes a current verification - cleared if it's revoked.
         VerifiedAt = status == VerificationStatus.Verified ? decidedAt : null;
+
+        // A business is only vouched for while the person behind it is.
+        if (status != VerificationStatus.Verified)
+        {
+            BusinessVerifiedAt = null;
+        }
     }
+
+    public void VerifyBusiness(DateTime now) => BusinessVerifiedAt = now;
+
+    public void RevokeBusinessVerification() => BusinessVerifiedAt = null;
 
     /// <summary>NDPA data-subject deletion: clears identifying business/ID fields. Id/UserId/VerificationStatus/CreatedAt are kept, since Listings/Transactions/TrustScore still reference this SellerId for financial/audit history.</summary>
     public void Anonymize()
@@ -65,5 +81,6 @@ public class SellerProfile
         RcNumber = null;
         Nin = null;
         StoreAddress = null;
+        BusinessVerifiedAt = null;
     }
 }

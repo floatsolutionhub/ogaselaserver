@@ -18,6 +18,7 @@ public sealed class SellerProfileConfiguration : IEntityTypeConfiguration<Seller
         builder.Property(s => s.StoreAddress).HasMaxLength(300);
         builder.Property(s => s.VerificationStatus).HasConversion<string>().HasMaxLength(32).IsRequired();
         builder.Property(s => s.CreatedAt).IsRequired();
+        builder.Ignore(s => s.IsBusinessVerified);
 
         builder.HasIndex(s => s.UserId).IsUnique();
     }

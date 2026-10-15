@@ -6,7 +6,7 @@ using Ogasela.Application.Settings;
 
 namespace Ogasela.Api.Controllers.Admin;
 
-/// <summary>Control Portal → Settings: ad approvals, the free-ad limit and platform-wide notification switches. SuperAdmin only. Plans live on PromotionPlansController.</summary>
+/// <summary>Control Portal → Settings: ad approvals, the free-ad limit, platform-wide notification switches and the chat safety notice. SuperAdmin only. Plans live on PromotionPlansController.</summary>
 [ApiController]
 [Authorize(Policy = "SuperAdmin")]
 [Route("api/v1/admin/settings")]

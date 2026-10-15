@@ -9,6 +9,7 @@ using Ogasela.Application.Accounts.SetPushToken;
 using Ogasela.Application.Accounts.ProfilePhoto;
 using Ogasela.Application.Accounts.UpdateProfile;
 using Ogasela.Application.Accounts.UserDocuments;
+using Ogasela.Application.Accounts.VerificationOverview;
 
 namespace Ogasela.Api.Controllers.Accounts;
 
@@ -89,6 +90,11 @@ public sealed class MeController : ControllerBase
         var result = await _sender.Send(new UploadProfilePhotoCommand(stream, image.FileName, image.ContentType), cancellationToken);
         return result.ToActionResult(this);
     }
+
+    /// <summary>Personal and (sellers) business verification: status plus what's still missing, for the app's prompts.</summary>
+    [HttpGet("verification")]
+    public async Task<IActionResult> GetVerificationOverview(CancellationToken cancellationToken) =>
+        (await _sender.Send(new GetVerificationOverviewQuery(), cancellationToken)).ToActionResult(this);
 
     /// <summary>The caller's uploaded documents (ID card, utility bill), newest first, with review status.</summary>
     [HttpGet("documents")]

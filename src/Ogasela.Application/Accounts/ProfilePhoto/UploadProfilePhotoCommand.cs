@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Ogasela.Application.Accounts.Interfaces;
 using Ogasela.Application.Common.Interfaces;
 using Ogasela.Application.Verification.Interfaces;
+using Ogasela.Domain.Accounts;
 using Ogasela.Shared;
 
 namespace Ogasela.Application.Accounts.ProfilePhoto;
@@ -50,6 +51,13 @@ public sealed class UploadProfilePhotoCommandHandler : IRequestHandler<UploadPro
         if (user is null)
         {
             return Result.Failure<ProfilePhotoResponse>(AccountErrors.UserNotFound);
+        }
+
+        // The selfie is part of what verification was decided on - frozen once it's granted.
+        if (await _dbContext.SellerProfiles.AnyAsync(
+                s => s.UserId == user.Id && s.VerificationStatus == VerificationStatus.Verified, cancellationToken))
+        {
+            return Result.Failure<ProfilePhotoResponse>(AccountErrors.VerifiedIdentityLocked);
         }
 
         var key = await _storage.UploadAsync(request.FileName, request.ContentType, request.Image, cancellationToken);

@@ -67,6 +67,8 @@ public sealed class UpdateListingCommandHandler : IRequestHandler<UpdateListingC
             request.Condition, request.MediaUrls, now);
 
         listing.SetLocation(request.Location, request.Latitude, request.Longitude, now);
+        listing.SetReceiptAndLinks(
+            request.HasOriginalReceipt, request.TikTokUrl, request.FacebookUrl, request.InstagramUrl, request.YouTubeUrl, now);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 

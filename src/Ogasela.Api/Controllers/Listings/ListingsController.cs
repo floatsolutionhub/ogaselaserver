@@ -35,7 +35,8 @@ public sealed class ListingsController : ControllerBase
     {
         var command = new CreateDraftListingCommand(
             request.Title, request.Description, request.CategoryId, request.Price, request.Condition,
-            request.MediaUrls ?? [], request.PromotionPlanId, request.Location, request.Latitude, request.Longitude);
+            request.MediaUrls ?? [], request.PromotionPlanId, request.Location, request.Latitude, request.Longitude,
+            request.HasOriginalReceipt, request.TikTokUrl, request.FacebookUrl, request.InstagramUrl, request.YouTubeUrl);
 
         var result = await _sender.Send(command, cancellationToken);
         return result.ToActionResult(this);
@@ -82,7 +83,8 @@ public sealed class ListingsController : ControllerBase
     {
         var command = new UpdateListingCommand(
             id, request.Title, request.Description, request.CategoryId, request.Price, request.Condition,
-            request.MediaUrls ?? [], request.PromotionPlanId, request.Location, request.Latitude, request.Longitude);
+            request.MediaUrls ?? [], request.PromotionPlanId, request.Location, request.Latitude, request.Longitude,
+            request.HasOriginalReceipt, request.TikTokUrl, request.FacebookUrl, request.InstagramUrl, request.YouTubeUrl);
 
         var result = await _sender.Send(command, cancellationToken);
         return result.ToActionResult(this);

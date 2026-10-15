@@ -57,11 +57,20 @@ public sealed class AdminUsersController : ControllerBase
     public async Task<IActionResult> RevokeSessions(Guid id, CancellationToken cancellationToken) =>
         (await _sender.Send(new RevokeUserSessionsCommand(id), cancellationToken)).ToActionResult(this);
 
-    /// <summary>Verify a seller by hand (or revoke it, with a reason they see). Verified sellers can publish ads.</summary>
+    /// <summary>Verify a person by hand (or revoke it, with a reason they see). Verified sellers can publish ads; a verified buyer becomes a seller.</summary>
     [HttpPost("{id:guid}/verification")]
     [Authorize(Policy = "perm:users.verify")]
     public async Task<IActionResult> SetVerification(Guid id, SetSellerVerificationRequest request, CancellationToken cancellationToken) =>
         (await _sender.Send(new SetSellerVerificationCommand(id, request.Verified, request.Reason), cancellationToken))
+            .ToActionResult(this);
+
+    /// <summary>Verify a seller's business (approved registration + proof of office address, person already verified),
+    /// or revoke it with a reason they see. A trust badge on their shop and ads.</summary>
+    [HttpPost("{id:guid}/business-verification")]
+    [Authorize(Policy = "perm:users.verify")]
+    public async Task<IActionResult> SetBusinessVerification(
+        Guid id, SetSellerVerificationRequest request, CancellationToken cancellationToken) =>
+        (await _sender.Send(new SetBusinessVerificationCommand(id, request.Verified, request.Reason), cancellationToken))
             .ToActionResult(this);
 
     [HttpPost("{id:guid}/documents/{documentId:guid}/review")]

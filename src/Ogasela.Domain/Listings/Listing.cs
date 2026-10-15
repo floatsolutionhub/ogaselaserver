@@ -55,6 +55,22 @@ public class Listing
 
     public DateTime UpdatedAt { get; private set; }
 
+    /// <summary>Used items only: whether the seller has the original receipt of purchase. Null for new items
+    /// or when the seller didn't say.</summary>
+    public bool? HasOriginalReceipt { get; private set; }
+
+    /// <summary>Optional links to the item on the seller's social accounts, shown on the ad.</summary>
+    public string? TikTokUrl { get; private set; }
+
+    public string? FacebookUrl { get; private set; }
+
+    public string? InstagramUrl { get; private set; }
+
+    /// <summary>Played inside the app on the ad screen.</summary>
+    public string? YouTubeUrl { get; private set; }
+
+    public const int SocialLinkMaxLength = 500;
+
     public static Listing CreateDraft(
         Guid id,
         Guid sellerId,
@@ -107,6 +123,20 @@ public class Listing
         MediaUrls.AddRange(mediaUrls);
 
         UpdatedAt = now;
+    }
+
+    /// <summary>Call after <see cref="CreateDraft"/>/<see cref="UpdateDetails"/>: the receipt flag only applies to used items.</summary>
+    public void SetReceiptAndLinks(
+        bool? hasOriginalReceipt, string? tikTokUrl, string? facebookUrl, string? instagramUrl, string? youTubeUrl, DateTime now)
+    {
+        HasOriginalReceipt = Condition == ListingCondition.Used ? hasOriginalReceipt : null;
+        TikTokUrl = Clean(tikTokUrl);
+        FacebookUrl = Clean(facebookUrl);
+        InstagramUrl = Clean(instagramUrl);
+        YouTubeUrl = Clean(youTubeUrl);
+        UpdatedAt = now;
+
+        static string? Clean(string? url) => string.IsNullOrWhiteSpace(url) ? null : url.Trim();
     }
 
     /// <summary>Records the plan picked at checkout; the listing stays a Draft until it's paid for.</summary>

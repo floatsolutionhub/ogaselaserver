@@ -16,4 +16,9 @@ public sealed record UpdateListingCommand(
     Guid? PromotionPlanId,
     string? Location = null,
     decimal? Latitude = null,
-    decimal? Longitude = null) : IRequest<Result<ListingResponse>>;
+    decimal? Longitude = null,
+    bool? HasOriginalReceipt = null,
+    string? TikTokUrl = null,
+    string? FacebookUrl = null,
+    string? InstagramUrl = null,
+    string? YouTubeUrl = null) : IRequest<Result<ListingResponse>>;

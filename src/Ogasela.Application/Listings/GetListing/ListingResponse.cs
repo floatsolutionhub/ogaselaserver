@@ -20,7 +20,12 @@ public sealed record ListingResponse(
     DateTime? ExpiresAt,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    string? ReviewNote = null)
+    string? ReviewNote = null,
+    bool? HasOriginalReceipt = null,
+    string? TikTokUrl = null,
+    string? FacebookUrl = null,
+    string? InstagramUrl = null,
+    string? YouTubeUrl = null)
 {
     public static ListingResponse From(Listing listing) => new(
         listing.Id,
@@ -40,5 +45,10 @@ public sealed record ListingResponse(
         listing.ExpiresAt,
         listing.CreatedAt,
         listing.UpdatedAt,
-        listing.ReviewNote);
+        listing.ReviewNote,
+        listing.HasOriginalReceipt,
+        listing.TikTokUrl,
+        listing.FacebookUrl,
+        listing.InstagramUrl,
+        listing.YouTubeUrl);
 }

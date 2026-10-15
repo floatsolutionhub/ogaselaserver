@@ -94,6 +94,22 @@ public sealed class UserDocumentHandlers :
                 "UserDocument.SellersOnly", "Only seller accounts can upload business documents.");
         }
 
+        // The ID card and utility bill are what verification was decided on - frozen once it's granted.
+        if (request.Type is UserDocumentType.IdCard or UserDocumentType.UtilityBill
+            && await _dbContext.SellerProfiles.AnyAsync(
+                s => s.UserId == _currentUser.UserId && s.VerificationStatus == VerificationStatus.Verified, cancellationToken))
+        {
+            return Result.Failure<UserDocumentResponse>(AccountErrors.VerifiedIdentityLocked);
+        }
+
+        // Likewise the business documents once the business is verified.
+        if (request.Type is UserDocumentType.BusinessRegistration or UserDocumentType.OfficeUtilityBill
+            && await _dbContext.SellerProfiles.AnyAsync(
+                s => s.UserId == _currentUser.UserId && s.BusinessVerifiedAt != null, cancellationToken))
+        {
+            return Result.Failure<UserDocumentResponse>(AccountErrors.VerifiedBusinessLocked);
+        }
+
         var key = await _storage.UploadAsync(request.FileName, request.ContentType, request.File, cancellationToken);
         var document = UserDocument.Create(
             _currentUser.UserId!.Value,

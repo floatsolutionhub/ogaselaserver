@@ -58,6 +58,8 @@ public sealed class CreateDraftListingCommandHandler : IRequestHandler<CreateDra
             request.Price, request.Condition, request.MediaUrls, now);
 
         listing.SetLocation(request.Location, request.Latitude, request.Longitude, now);
+        listing.SetReceiptAndLinks(
+            request.HasOriginalReceipt, request.TikTokUrl, request.FacebookUrl, request.InstagramUrl, request.YouTubeUrl, now);
 
         _dbContext.Listings.Add(listing);
         await _dbContext.SaveChangesAsync(cancellationToken);

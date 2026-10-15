@@ -17,9 +17,17 @@ public static class PlatformSettingKeys
 {
     public const string RequireListingApproval = "listings.requireApproval";
     public const string FreePlanCap = "listings.freePlanCap";
+    public const string MessagingSafetyNotice = "messaging.safetyNotice";
 
     /// <summary>Platform-wide switch for one channel of one notification category, e.g. "notifications.Verification.Email".</summary>
     public static string NotificationChannel(string category, NotificationChannel channel) => $"notifications.{category}.{channel}";
+}
+
+public static class PlatformSettingDefaults
+{
+    public const string MessagingSafetyNotice = "Do not send money for an item you have not seen and verified";
+
+    public const int MessagingSafetyNoticeMaxLength = 300;
 }
 
 /// <summary>Reads the SuperAdmin-editable platform settings, falling back to appsettings when a setting was never changed.</summary>
@@ -28,6 +36,9 @@ public interface IPlatformSettings
     Task<bool> RequireListingApprovalAsync(CancellationToken cancellationToken);
 
     Task<int> FreePlanCapAsync(CancellationToken cancellationToken);
+
+    /// <summary>The safety caption shown above the message box in every chat.</summary>
+    Task<string> MessagingSafetyNoticeAsync(CancellationToken cancellationToken);
 
     /// <summary>False when a SuperAdmin has switched this channel off for this category for everyone.</summary>
     Task<bool> IsNotificationChannelEnabledAsync(string category, NotificationChannel channel, CancellationToken cancellationToken);
@@ -54,6 +65,11 @@ public sealed class PlatformSettingsService : IPlatformSettings
             ? value
             : _listingDefaults.FreePlanCap;
 
+    public async Task<string> MessagingSafetyNoticeAsync(CancellationToken cancellationToken) =>
+        await ValueAsync(PlatformSettingKeys.MessagingSafetyNotice, cancellationToken) is { Length: > 0 } notice
+            ? notice
+            : PlatformSettingDefaults.MessagingSafetyNotice;
+
     public async Task<bool> IsNotificationChannelEnabledAsync(
         string category, NotificationChannel channel, CancellationToken cancellationToken) =>
         !bool.TryParse(await ValueAsync(PlatformSettingKeys.NotificationChannel(category, channel), cancellationToken), out var value)
@@ -71,7 +87,8 @@ public sealed record PlatformSettingsResponse(
     bool RequireListingApproval,
     int FreePlanCap,
     IReadOnlyList<NotificationCategorySettings> Notifications,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    string MessagingSafetyNotice);
 
 public sealed record NotificationCategorySettings(
     string Category, string Label, string Description, IReadOnlyList<NotificationChannelSetting> Channels);
@@ -82,7 +99,8 @@ public sealed record NotificationChannelSetting(NotificationChannel Channel, boo
 public sealed record UpdatePlatformSettingsCommand(
     bool? RequireListingApproval,
     int? FreePlanCap,
-    IReadOnlyList<NotificationSwitch>? Notifications) : IRequest<Result<PlatformSettingsResponse>>;
+    IReadOnlyList<NotificationSwitch>? Notifications,
+    string? MessagingSafetyNotice = null) : IRequest<Result<PlatformSettingsResponse>>;
 
 public sealed record NotificationSwitch(string Category, NotificationChannel Channel, bool Enabled);
 
@@ -92,6 +110,11 @@ public sealed class UpdatePlatformSettingsCommandValidator : AbstractValidator<U
     {
         RuleFor(x => x.FreePlanCap).InclusiveBetween(0, 100).When(x => x.FreePlanCap is not null)
             .WithMessage("Free ads per seller must be between 0 and 100.");
+        RuleFor(x => x.MessagingSafetyNotice)
+            .Must(n => !string.IsNullOrWhiteSpace(n)).When(x => x.MessagingSafetyNotice is not null)
+            .WithMessage("The chat safety notice can't be empty.")
+            .MaximumLength(PlatformSettingDefaults.MessagingSafetyNoticeMaxLength)
+            .WithMessage($"Keep the chat safety notice under {PlatformSettingDefaults.MessagingSafetyNoticeMaxLength} characters.");
         RuleForEach(x => x.Notifications).ChildRules(s =>
         {
             s.RuleFor(n => n.Category).Must(c => PlatformSettingsHandlers.Categories.Any(k => k.Key == c))
@@ -147,6 +170,11 @@ public sealed class PlatformSettingsHandlers :
         if (request.FreePlanCap is { } cap)
         {
             changes[PlatformSettingKeys.FreePlanCap] = cap.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (request.MessagingSafetyNotice is { } notice)
+        {
+            changes[PlatformSettingKeys.MessagingSafetyNotice] = notice.Trim();
         }
 
         foreach (var notification in request.Notifications ?? [])
@@ -206,6 +234,7 @@ public sealed class PlatformSettingsHandlers :
             await _settings.RequireListingApprovalAsync(cancellationToken),
             await _settings.FreePlanCapAsync(cancellationToken),
             notifications,
-            updatedAt);
+            updatedAt,
+            await _settings.MessagingSafetyNoticeAsync(cancellationToken));
     }
 }
