@@ -48,7 +48,8 @@ public sealed class CategoriesController : ControllerBase
             imageStream,
             request.Image?.FileName,
             request.Image?.ContentType,
-            request.Subcategories);
+            request.Subcategories,
+            request.IsOfficePickupEligible);
 
         var result = await _sender.Send(command, cancellationToken);
         return result.ToActionResult(this);
@@ -70,7 +71,8 @@ public sealed class CategoriesController : ControllerBase
             request.AttributeSchemaVersion,
             imageStream,
             request.Image?.FileName,
-            request.Image?.ContentType);
+            request.Image?.ContentType,
+            request.IsOfficePickupEligible);
 
         var result = await _sender.Send(command, cancellationToken);
         return result.ToActionResult(this);

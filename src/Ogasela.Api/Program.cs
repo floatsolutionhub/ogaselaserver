@@ -57,12 +57,8 @@ builder.Host.UseSerilog((context, services, configuration) =>
 
 builder.Services.AddApplication(builder.Configuration);
 
-// The master OTP (Default_Global_OTP) is for development/testing only - never honoured in Production.
+// The master OTP (Default_Global_OTP) is honoured in every environment, Production included.
 var masterOtpConfigured = !string.IsNullOrWhiteSpace(builder.Configuration[$"{OtpSettings.SectionName}:MasterCode"]);
-if (builder.Environment.IsProduction())
-{
-    builder.Services.PostConfigure<OtpSettings>(o => o.MasterCode = null);
-}
 builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddOpenApi(options =>
@@ -178,16 +174,9 @@ var app = builder.Build();
 
 if (masterOtpConfigured)
 {
-    if (app.Environment.IsProduction())
-    {
-        app.Logger.LogWarning("Default_Global_OTP is set but ignored: the master OTP is disabled in Production.");
-    }
-    else
-    {
-        app.Logger.LogWarning(
-            "Master OTP (Default_Global_OTP) is ENABLED in the {Environment} environment - every OTP check also accepts it.",
-            app.Environment.EnvironmentName);
-    }
+    app.Logger.LogWarning(
+        "Master OTP (Default_Global_OTP) is ENABLED in the {Environment} environment - every OTP check also accepts it.",
+        app.Environment.EnvironmentName);
 }
 
 using (var scope = app.Services.CreateScope())

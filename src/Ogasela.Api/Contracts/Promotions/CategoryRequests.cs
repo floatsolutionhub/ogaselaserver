@@ -14,6 +14,10 @@ public sealed class CreateCategoryRequest
     [FromForm(Name = "isFreeEligible")]
     public bool IsFreeEligible { get; set; } = true;
 
+    /// <summary>Whether buyers can request office pickup on ads here. On a top-level category it covers every subcategory.</summary>
+    [FromForm(Name = "isOfficePickupEligible")]
+    public bool IsOfficePickupEligible { get; set; }
+
     [FromForm(Name = "attributeSchemaVersion")]
     public int AttributeSchemaVersion { get; set; } = 1;
 
@@ -36,6 +40,10 @@ public sealed class UpdateCategoryRequest
 
     [FromForm(Name = "isFreeEligible")]
     public bool IsFreeEligible { get; set; }
+
+    /// <summary>Omit to leave the office pickup setting unchanged.</summary>
+    [FromForm(Name = "isOfficePickupEligible")]
+    public bool? IsOfficePickupEligible { get; set; }
 
     [FromForm(Name = "attributeSchemaVersion")]
     public int AttributeSchemaVersion { get; set; }

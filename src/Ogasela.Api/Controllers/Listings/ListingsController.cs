@@ -76,6 +76,12 @@ public sealed class ListingsController : ControllerBase
     public async Task<IActionResult> ConfirmCheckout(Guid id, string reference, CancellationToken cancellationToken) =>
         (await _sender.Send(new ConfirmListingPaymentCommand(id, reference), cancellationToken)).ToActionResult(this);
 
+    /// <summary>The seller closed the payment page without paying - recorded as cancelled unless the gateway says it was paid or is still in progress.</summary>
+    [HttpPost("api/v1/listings/{id:guid}/checkout/{reference}/cancel")]
+    [Authorize]
+    public async Task<IActionResult> CancelCheckoutPayment(Guid id, string reference, CancellationToken cancellationToken) =>
+        (await _sender.Send(new CancelListingPaymentCommand(id, reference), cancellationToken)).ToActionResult(this);
+
     /// <summary>Replaces a listing's editable fields. Only allowed while the listing is a Draft or Active.</summary>
     [HttpPut("api/v1/listings/{id:guid}")]
     [Authorize]

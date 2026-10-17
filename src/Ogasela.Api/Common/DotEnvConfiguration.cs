@@ -18,6 +18,7 @@ public static class DotEnvConfiguration
         ["Default_Global_OTP"] = "Otp:MasterCode",
         ["TERMII_API_KEY"] = "Termii:ApiKey",
         ["EMAIL_SMTP_KEY"] = "Email:SmtpKey",
+        ["EMAIL_SMTP_PORT"] = "Email:Port",
         ["AWS_REGION"] = "Aws:Region",
         ["AWS_ACCESS_KEY_ID"] = "Aws:AccessKeyId",
         ["AWS_SECRET_ACCESS_KEY"] = "Aws:SecretAccessKey",
