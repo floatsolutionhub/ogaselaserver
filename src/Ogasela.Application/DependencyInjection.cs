@@ -40,6 +40,8 @@ public static class DependencyInjection
         services.Configure<ListingSettings>(configuration.GetSection(ListingSettings.SectionName));
         services.AddScoped<ListingPublishService>();
         services.AddScoped<Listings.Checkout.ListingPaymentSettlement>();
+        services.AddScoped<OfficePickups.OfficePickupNotifier>();
+        services.AddScoped<OfficePickups.OfficePickupPaymentSettlement>();
         services.AddScoped<Settings.IPlatformSettings, Settings.PlatformSettingsService>();
 
         services.Configure<PaymentSettings>(configuration.GetSection(PaymentSettings.SectionName));

@@ -12,4 +12,5 @@ public sealed record UpdateCategoryCommand(
     int AttributeSchemaVersion,
     Stream? Image,
     string? ImageFileName,
-    string? ImageContentType) : IRequest<Result<CategoryResponse>>;
+    string? ImageContentType,
+    bool? IsOfficePickupEligible = null) : IRequest<Result<CategoryResponse>>;

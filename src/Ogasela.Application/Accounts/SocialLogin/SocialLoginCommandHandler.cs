@@ -72,7 +72,7 @@ public sealed class SocialLoginCommandHandler : IRequestHandler<SocialLoginComma
 
         if (linkedUser is not null)
         {
-            return await SignInAsync(linkedUser, isNewUser: false, cancellationToken);
+            return await SignInAsync(linkedUser, isNewUser: false, cancellationToken, identity);
         }
 
         var email = string.IsNullOrWhiteSpace(identity.Email) ? null : identity.Email.Trim().ToLowerInvariant();
@@ -104,7 +104,7 @@ public sealed class SocialLoginCommandHandler : IRequestHandler<SocialLoginComma
 
                 _dbContext.ExternalLogins.Add(ExternalLogin.Create(existingUser.Id, request.Provider, identity.ProviderUserId, now));
                 await _dbContext.SaveChangesAsync(cancellationToken);
-                return await SignInAsync(existingUser, isNewUser: false, cancellationToken);
+                return await SignInAsync(existingUser, isNewUser: false, cancellationToken, identity);
             }
         }
 
@@ -127,11 +127,19 @@ public sealed class SocialLoginCommandHandler : IRequestHandler<SocialLoginComma
             await SendWelcomeEmailAsync(email, name, request.AccountType, cancellationToken);
         }
 
-        return await SignInAsync(newUser, isNewUser: true, cancellationToken);
+        return await SignInAsync(newUser, isNewUser: true, cancellationToken, identity);
     }
 
-    private async Task<Result<SocialLoginResponse>> SignInAsync(User user, bool isNewUser, CancellationToken cancellationToken)
+    private async Task<Result<SocialLoginResponse>> SignInAsync(
+        User user, bool isNewUser, CancellationToken cancellationToken, SocialIdentity identity)
     {
+        // The provider vouches the account's email is theirs - saved by IssueAsync below.
+        if (identity.EmailVerified && user.Email is not null && identity.Email is not null
+            && string.Equals(user.Email.Trim(), identity.Email.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            user.MarkEmailVerified(_dateTime.UtcNow);
+        }
+
         if (!ConsumerRoles.Contains(user.Role))
         {
             return Result.Failure<SocialLoginResponse>(AccountErrors.SocialLoginNotAllowed);

@@ -9,6 +9,7 @@ using Ogasela.Domain.Marketing;
 using Ogasela.Domain.Messaging;
 using Ogasela.Domain.Moderation;
 using Ogasela.Domain.Notifications;
+using Ogasela.Domain.OfficePickups;
 using Ogasela.Domain.Payments;
 using Ogasela.Domain.Promotions;
 using Ogasela.Domain.Rbac;
@@ -56,6 +57,12 @@ public sealed class TestApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<Ogasela.Domain.Settings.PlatformSetting> PlatformSettings => Set<Ogasela.Domain.Settings.PlatformSetting>();
 
     public DbSet<DisputeMessage> DisputeMessages => Set<DisputeMessage>();
+
+    public DbSet<OfficeBranch> OfficeBranches => Set<OfficeBranch>();
+
+    public DbSet<OfficePickupRequest> OfficePickupRequests => Set<OfficePickupRequest>();
+
+    public DbSet<OfficePickupActivity> OfficePickupActivities => Set<OfficePickupActivity>();
 
     public DbSet<BiometricVerification> BiometricVerifications => Set<BiometricVerification>();
 

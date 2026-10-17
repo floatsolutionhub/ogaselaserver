@@ -11,11 +11,11 @@ using Ogasela.Shared;
 namespace Ogasela.Application.Accounts.Login;
 
 /// <summary>
-/// Verifies phone-or-email + password, then - for every account reaching this point (internal
-/// roles are turned away below) - sends a 6-digit OTP the same way AdminLoginCommandHandler does
-/// for internal roles: to the account's phone via SMS, and to its email too if it has one, both
-/// best-effort. No tokens are issued here; VerifyLoginOtpCommand does that once the code is
-/// confirmed.
+/// Verifies phone-or-email + password, then sends a 6-digit OTP (best-effort). The code goes to the
+/// identifier the user signed in with, plus their other contact if that one is verified. When the
+/// identifier itself isn't verified yet it goes there alone, worded as a verification, and
+/// VerifyLoginOtpCommand marks it verified - so every sign-in is through a verified email or phone.
+/// Internal roles are turned away (they use AdminLoginCommand). No tokens are issued here.
 /// </summary>
 public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<LoginOtpSentResponse>>
 {
@@ -68,46 +68,74 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<L
             return Result.Failure<LoginOtpSentResponse>(AccountErrors.AccountSuspended);
         }
 
-        if (string.IsNullOrWhiteSpace(user.Phone))
+        // The code always goes to the identifier they typed - entering it is what proves (or
+        // re-proves) they own it. Their other contact only gets it once that one is verified too, so
+        // nobody can complete a sign-in through an address they never proved they own.
+        var byPhone = request.Phone is not null;
+        var identifierVerified = byPhone ? user.IsPhoneVerified : user.IsEmailVerified;
+        var sendSms = byPhone || user.IsPhoneVerified;
+        var sendEmail = !byPhone || user.IsEmailVerified;
+        if (!identifierVerified)
         {
-            return Result.Failure<LoginOtpSentResponse>(AccountErrors.MfaPhoneRequired);
+            sendSms = byPhone;
+            sendEmail = !byPhone;
         }
 
-        var code = await _otpService.GenerateAsync(user.Phone, cancellationToken);
+        var code = await _otpService.GenerateAsync(LoginOtpKey.For(byPhone ? user.Phone : null, byPhone ? null : user.Email), cancellationToken);
+        var purpose = identifierVerified ? "login" : "verification";
 
-        try
-        {
-            await _smsSender.SendAsync(user.Phone, $"Your Ogasela login code is {code}. It expires in 5 minutes. Do not share this code with anyone.", cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to send login OTP SMS to {Phone}", user.Phone);
-        }
-
-        if (!string.IsNullOrWhiteSpace(user.Email))
+        if (sendSms && !string.IsNullOrWhiteSpace(user.Phone))
         {
             try
             {
-                var html = BrandedEmailTemplate.Render(
-                    previewText: "Your Ogasela login code",
-                    heading: "Your login code",
-                    bodyParagraphs:
-                    [
-                        $"Your Ogasela login code is {code}. It expires in 5 minutes and can be used once.",
-                        "If you didn't try to sign in, you can ignore this email - your account is still safe."
-                    ],
-                    eyebrow: "Security");
-
-                await _emailSender.SendAsync(
-                    new EmailMessage(user.Email, user.Name, "Your Ogasela login code", html), cancellationToken);
+                await _smsSender.SendAsync(user.Phone, $"Your Ogasela {purpose} code is {code}. It expires in 5 minutes. Do not share this code with anyone.", cancellationToken);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to send login OTP email to {Email}", user.Email);
+                _logger.LogError(ex, "Failed to send {Purpose} OTP SMS to {Phone}", purpose, user.Phone);
             }
         }
 
-        return Result.Success(new LoginOtpSentResponse(MaskEmail(user.Email), MaskPhone(user.Phone)));
+        if (sendEmail && !string.IsNullOrWhiteSpace(user.Email))
+        {
+            try
+            {
+                var html = identifierVerified
+                    ? BrandedEmailTemplate.Render(
+                        previewText: "Your Ogasela login code",
+                        heading: "Your login code",
+                        bodyParagraphs:
+                        [
+                            $"Your Ogasela login code is {code}. It expires in 5 minutes and can be used once.",
+                            "If you didn't try to sign in, you can ignore this email - your account is still safe."
+                        ],
+                        eyebrow: "Security")
+                    : BrandedEmailTemplate.Render(
+                        previewText: "Verify your email to sign in",
+                        heading: "Verify your email address",
+                        bodyParagraphs:
+                        [
+                            $"Enter {code} in the Ogasela app to verify this email address and finish signing in. It expires in 5 minutes.",
+                            "If you didn't try to sign in to Ogasela, you can ignore this email."
+                        ],
+                        eyebrow: "Verification");
+
+                await _emailSender.SendAsync(
+                    new EmailMessage(user.Email, user.Name,
+                        identifierVerified ? "Your Ogasela login code" : "Verify your email for Ogasela", html),
+                    cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send {Purpose} OTP email to {Email}", purpose, user.Email);
+            }
+        }
+
+        return Result.Success(new LoginOtpSentResponse(
+            sendEmail ? MaskEmail(user.Email) : string.Empty,
+            sendSms ? MaskPhone(user.Phone) : string.Empty,
+            VerificationRequired: !identifierVerified,
+            Channel: byPhone ? "Phone" : "Email"));
     }
 
     private static string MaskEmail(string? email)
@@ -121,6 +149,6 @@ public sealed class LoginCommandHandler : IRequestHandler<LoginCommand, Result<L
         return at <= 1 ? email : $"{email[0]}***{email[at..]}";
     }
 
-    private static string MaskPhone(string phone) =>
-        phone.Length <= 6 ? phone : $"{phone[..3]}***{phone[^3..]}";
+    private static string MaskPhone(string? phone) =>
+        string.IsNullOrWhiteSpace(phone) ? string.Empty : phone.Length <= 6 ? phone : $"{phone[..3]}***{phone[^3..]}";
 }

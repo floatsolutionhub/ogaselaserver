@@ -8,8 +8,8 @@ public sealed class OtpSettings
     /// Optional master code (Default_Global_OTP in .env). When set, OtpService accepts it in place
     /// of the generated code for every OTP check in the app - phone verification, user and admin
     /// login, password resets, phone/email changes. Anyone who knows it can pass any account's OTP
-    /// step, so Program.cs clears it whenever the app runs in the Production environment, whatever
-    /// .env says. Each use is logged as a warning.
+    /// step. It is honoured in every environment, Production included - leave it unset to disable it.
+    /// Each use is logged as a warning.
     /// </summary>
     public string? MasterCode { get; set; }
 }

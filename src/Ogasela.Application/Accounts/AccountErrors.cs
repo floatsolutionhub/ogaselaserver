@@ -56,6 +56,10 @@ public static class AccountErrors
         "User.ProfilePhotoRejected",
         $"That photo can't be used{(string.IsNullOrWhiteSpace(reason) ? "" : $" ({reason.ToLowerInvariant()})")}. Face the camera in good light and try again.");
 
+    public static readonly Error DocumentAlreadyPending = new(
+        "UserDocument.AlreadyPending",
+        "You already have this document waiting for review. You can upload another once it's approved or rejected.");
+
     public static readonly Error VerifiedIdentityLocked = new(
         "User.VerifiedIdentityLocked", "Your account is verified, so your selfie, ID card and utility bill can no longer be changed.");
 

@@ -22,6 +22,12 @@ public class Category
 
     public int AttributeSchemaVersion { get; private set; }
 
+    /// <summary>
+    /// Whether buyers can request an office pickup for ads in this category. Set from the Control
+    /// Portal; an ad qualifies when its own category or that category's parent has it on.
+    /// </summary>
+    public bool IsOfficePickupEligible { get; private set; }
+
     /// <summary>Storage key for the image representing this category/subcategory, set at creation.</summary>
     public string? ImageS3Key { get; private set; }
 
@@ -58,6 +64,12 @@ public class Category
         ParentCategoryId = parentCategoryId;
         IsFreeEligible = isFreeEligible;
         AttributeSchemaVersion = attributeSchemaVersion;
+        UpdatedAt = now;
+    }
+
+    public void SetOfficePickupEligible(bool eligible, DateTime now)
+    {
+        IsOfficePickupEligible = eligible;
         UpdatedAt = now;
     }
 

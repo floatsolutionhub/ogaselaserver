@@ -31,8 +31,11 @@ public enum ListingCheckoutOutcome
     /// <summary>The card payment hasn't been confirmed by the gateway yet - confirm again shortly.</summary>
     PaymentPending,
 
-    /// <summary>The gateway reports the card payment failed or was abandoned. The listing is still a Draft.</summary>
-    PaymentFailed
+    /// <summary>The gateway reports the card payment failed. The listing is still a Draft.</summary>
+    PaymentFailed,
+
+    /// <summary>The seller left the payment page without paying. Nothing was charged; the listing is still a Draft.</summary>
+    PaymentCancelled
 }
 
 /// <summary>
@@ -50,6 +53,13 @@ public sealed record StartListingCheckoutCommand(Guid ListingId, Guid PromotionP
 /// webhook would. Safe to call repeatedly.
 /// </summary>
 public sealed record ConfirmListingPaymentCommand(Guid ListingId, string Reference) : IRequest<Result<ListingCheckoutResponse>>;
+
+/// <summary>
+/// Called when the seller closes the payment page without returning through the success page. Asks
+/// the gateway first: a payment that went through is settled as normal, one still in progress at the
+/// bank stays pending, and only one that was never paid is recorded as Cancelled.
+/// </summary>
+public sealed record CancelListingPaymentCommand(Guid ListingId, string Reference) : IRequest<Result<ListingCheckoutResponse>>;
 
 public sealed record ListingCheckoutResponse(
     ListingCheckoutOutcome Outcome,
@@ -78,7 +88,8 @@ public sealed class ConfirmListingPaymentCommandValidator : AbstractValidator<Co
 
 public sealed class ListingCheckoutHandlers :
     IRequestHandler<StartListingCheckoutCommand, Result<ListingCheckoutResponse>>,
-    IRequestHandler<ConfirmListingPaymentCommand, Result<ListingCheckoutResponse>>
+    IRequestHandler<ConfirmListingPaymentCommand, Result<ListingCheckoutResponse>>,
+    IRequestHandler<CancelListingPaymentCommand, Result<ListingCheckoutResponse>>
 {
     private readonly IApplicationDbContext _dbContext;
     private readonly ICurrentUserService _currentUser;
@@ -172,17 +183,24 @@ public sealed class ListingCheckoutHandlers :
             ListingCheckoutOutcome.PaymentRequired, ListingResponse.From(listing), init.Value.Reference, init.Value.RedirectUrl));
     }
 
-    public async Task<Result<ListingCheckoutResponse>> Handle(ConfirmListingPaymentCommand request, CancellationToken cancellationToken)
+    public Task<Result<ListingCheckoutResponse>> Handle(ConfirmListingPaymentCommand request, CancellationToken cancellationToken) =>
+        VerifyAndRespondAsync(request.ListingId, request.Reference, cancelIfUnpaid: false, cancellationToken);
+
+    public Task<Result<ListingCheckoutResponse>> Handle(CancelListingPaymentCommand request, CancellationToken cancellationToken) =>
+        VerifyAndRespondAsync(request.ListingId, request.Reference, cancelIfUnpaid: true, cancellationToken);
+
+    private async Task<Result<ListingCheckoutResponse>> VerifyAndRespondAsync(
+        Guid listingId, string reference, bool cancelIfUnpaid, CancellationToken cancellationToken)
     {
-        var owned = await LoadOwnedListingAsync(request.ListingId, cancellationToken);
+        var owned = await LoadOwnedListingAsync(listingId, cancellationToken);
         if (owned.IsFailure)
         {
             return Result.Failure<ListingCheckoutResponse>(owned.Error);
         }
 
         var transaction = await _dbContext.Transactions.FirstOrDefaultAsync(
-            t => t.GatewayReference == request.Reference
-                 && t.RelatedListingId == request.ListingId
+            t => t.GatewayReference == reference
+                 && t.RelatedListingId == listingId
                  && t.Type == TransactionType.PlanPurchase,
             cancellationToken);
         if (transaction is null)
@@ -192,25 +210,41 @@ public sealed class ListingCheckoutHandlers :
 
         if (transaction.Status == TransactionStatus.Pending)
         {
-            var verify = await _gatewayResolver.GetActive().VerifyTransactionAsync(request.Reference, cancellationToken);
+            var verify = await _gatewayResolver.GetActive().VerifyTransactionAsync(reference, cancellationToken);
             if (verify.IsFailure)
             {
                 return Result.Failure<ListingCheckoutResponse>(PaymentErrors.GatewayError);
             }
 
-            await _settlement.SettleAsync(transaction, verify.Value, cancellationToken);
+            if (cancelIfUnpaid && verify.Value.State == PaymentAttemptState.Abandoned)
+            {
+                transaction.MarkCancelled();
+                try
+                {
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    // The webhook settled it at the same moment - report whatever it decided.
+                }
+            }
+            else if (verify.Value.State != PaymentAttemptState.Pending)
+            {
+                await _settlement.SettleAsync(transaction, verify.Value, cancellationToken);
+            }
         }
 
-        var listing = await _dbContext.Listings.AsNoTracking().FirstAsync(l => l.Id == request.ListingId, cancellationToken);
+        var listing = await _dbContext.Listings.AsNoTracking().FirstAsync(l => l.Id == listingId, cancellationToken);
         var outcome = transaction.Status switch
         {
             TransactionStatus.Success when listing.Status != ListingStatus.Draft => ListingCheckoutOutcome.Submitted,
             TransactionStatus.Pending => ListingCheckoutOutcome.PaymentPending,
+            TransactionStatus.Cancelled => ListingCheckoutOutcome.PaymentCancelled,
             // Paid but couldn't be submitted (credited to the wallet instead), or failed/abandoned.
             _ => ListingCheckoutOutcome.PaymentFailed
         };
 
-        return Result.Success(new ListingCheckoutResponse(outcome, ListingResponse.From(listing), request.Reference));
+        return Result.Success(new ListingCheckoutResponse(outcome, ListingResponse.From(listing), reference));
     }
 
     private async Task<Result<Listing>> LoadOwnedListingAsync(Guid listingId, CancellationToken cancellationToken)
@@ -255,13 +289,19 @@ public sealed class ListingPaymentSettlement
     {
         await _dbContext.ExecuteInTransactionAsync(async () =>
         {
-            if (transaction.Status != TransactionStatus.Pending)
+            if (!transaction.IsAwaitingSettlement)
             {
                 return;
             }
 
             if (!verification.Successful)
             {
+                // A payer-cancelled checkout stays Cancelled; only a live one is marked failed.
+                if (transaction.Status == TransactionStatus.Cancelled)
+                {
+                    return;
+                }
+
                 transaction.MarkFailed();
                 await SaveAsync(transaction, cancellationToken);
                 return;

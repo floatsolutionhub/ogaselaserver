@@ -40,7 +40,11 @@ public static class RbacSeeder
         ("listings.view", "Listings", "View all ads"),
         ("listings.manage", "Listings", "Take down, reinstate and recategorise ads"),
         ("disputes.view", "Disputes", "View buyer-seller disputes"),
-        ("disputes.manage", "Disputes", "Work and resolve disputes")
+        ("disputes.manage", "Disputes", "Work and resolve disputes"),
+        ("officepickup.view", "OfficePickup", "View office pickup requests"),
+        ("officepickup.manage", "OfficePickup", "Update office pickup progress (item received, inspection, ready, delivered)"),
+        ("officepickup.refund", "OfficePickup", "Refund office pickup requests"),
+        ("officepickup.setup", "OfficePickup", "Manage office pickup branches and eligible categories")
     ];
 
     public static async Task SeedAsync(IApplicationDbContext dbContext, CancellationToken cancellationToken)
@@ -63,7 +67,7 @@ public static class RbacSeeder
             "staff.view", "staff.create", "staff.kyc.review", "staff.kyc.approve", "staff.kyc.reject",
             "geo.state.manage", "geo.city.manage",
             "finance.dashboard.view", "audit.log.view", "moderation.queue.view", "verification.queue.view",
-            "users.view", "listings.view", "disputes.view"
+            "users.view", "listings.view", "disputes.view", "officepickup.view"
         };
         var hrKeys = new[]
         {

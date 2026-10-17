@@ -30,6 +30,10 @@ public sealed class FakePaymentGateway : IPaymentGateway
             new PaymentInitialization(reference, $"https://fake-checkout.test/{reference}")));
     }
 
+    public Task<Result<PaymentInitialization>> InitializeCustomerTransactionAsync(
+        string customerEmail, decimal amountKobo, string purpose, CancellationToken cancellationToken) =>
+        InitializeTransactionAsync(Guid.Empty, amountKobo, purpose, cancellationToken);
+
     public Task<Result<PaymentVerificationResult>> VerifyTransactionAsync(string reference, CancellationToken cancellationToken)
     {
         if (!_transactions.TryGetValue(reference, out var transaction))
@@ -38,11 +42,20 @@ public sealed class FakePaymentGateway : IPaymentGateway
         }
 
         return Task.FromResult(Result.Success(
-            new PaymentVerificationResult(transaction.Successful, reference, transaction.AmountKobo)));
+            new PaymentVerificationResult(transaction.Successful, reference, transaction.AmountKobo, transaction.State)));
     }
 
     public Task<Result> ProcessRefundAsync(string transactionReference, CancellationToken cancellationToken) =>
         Task.FromResult(Result.Success());
+
+    /// <summary>Partial refunds requested so far, for tests to assert on (reference to amount in kobo).</summary>
+    public ConcurrentDictionary<string, decimal> PartialRefunds { get; } = new();
+
+    public Task<Result> ProcessPartialRefundAsync(string transactionReference, decimal amountKobo, CancellationToken cancellationToken)
+    {
+        PartialRefunds[transactionReference] = amountKobo;
+        return Task.FromResult(Result.Success());
+    }
 
     public bool VerifyWebhookSignature(string rawBody, string? signatureHeaderValue)
     {
@@ -65,7 +78,25 @@ public sealed class FakePaymentGateway : IPaymentGateway
     {
         if (_transactions.TryGetValue(reference, out var transaction))
         {
-            _transactions[reference] = transaction with { Successful = false };
+            _transactions[reference] = transaction with { Successful = false, State = PaymentAttemptState.Failed };
+        }
+    }
+
+    /// <summary>Test-only hook: the payment goes through (again), e.g. after it was abandoned.</summary>
+    public void MarkSucceeded(string reference)
+    {
+        if (_transactions.TryGetValue(reference, out var transaction))
+        {
+            _transactions[reference] = transaction with { Successful = true, State = PaymentAttemptState.Succeeded };
+        }
+    }
+
+    /// <summary>Test-only hook: the payer closed the checkout without paying.</summary>
+    public void MarkAbandoned(string reference)
+    {
+        if (_transactions.TryGetValue(reference, out var transaction))
+        {
+            _transactions[reference] = transaction with { Successful = false, State = PaymentAttemptState.Abandoned };
         }
     }
 
@@ -75,5 +106,6 @@ public sealed class FakePaymentGateway : IPaymentGateway
     public static string BuildWebhookBody(string reference) =>
         "{\"event\":\"charge.success\",\"data\":{\"reference\":\"" + reference + "\",\"status\":\"success\"}}";
 
-    private sealed record PendingTransaction(decimal AmountKobo, bool Successful);
+    private sealed record PendingTransaction(
+        decimal AmountKobo, bool Successful, PaymentAttemptState State = PaymentAttemptState.Succeeded);
 }

@@ -18,7 +18,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -203,6 +203,9 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<DateTime?>("EmailVerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("MustChangePassword")
                         .HasColumnType("boolean");
 
@@ -217,6 +220,9 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                     b.Property<string>("Phone")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("PhoneVerifiedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("ProfilePhotoS3Key")
                         .HasMaxLength(500)
@@ -1017,6 +1023,9 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ListingId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("OfficePickupId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime?>("ReadAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1111,6 +1120,209 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("NotificationPreferences", (string)null);
+                });
+
+            modelBuilder.Entity("Ogasela.Domain.OfficePickups.OfficeBranch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("Latitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<decimal>("Longitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("OpeningHours")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("OfficeBranches", (string)null);
+                });
+
+            modelBuilder.Entity("Ogasela.Domain.OfficePickups.OfficePickupActivity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestId", "CreatedAt");
+
+                    b.ToTable("OfficePickupActivities", (string)null);
+                });
+
+            modelBuilder.Entity("Ogasela.Domain.OfficePickups.OfficePickupRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BuyerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("CancellationFeeKobo")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("CancellationRequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeliveryAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Fulfilment")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<decimal>("ItemPriceKobo")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("ListingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ListingTitle")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("RefundedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("RefundedKobo")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("SellerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("ServiceFeeKobo")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<decimal>("TotalKobo")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("BuyerUserId");
+
+                    b.HasIndex("PaymentReference")
+                        .IsUnique();
+
+                    b.HasIndex("Reference")
+                        .IsUnique();
+
+                    b.HasIndex("SellerUserId");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("OfficePickupRequests", (string)null);
                 });
 
             modelBuilder.Entity("Ogasela.Domain.Payments.Transaction", b =>
@@ -1211,6 +1423,9 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsFreeEligible")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsOfficePickupEligible")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1235,6 +1450,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Electronics",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
@@ -1244,6 +1460,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Fashion",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
@@ -1253,6 +1470,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = false,
+                            IsOfficePickupEligible = false,
                             Name = "Vehicles",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
@@ -1262,6 +1480,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = false,
+                            IsOfficePickupEligible = false,
                             Name = "Real Estate",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
@@ -1271,6 +1490,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Home & Furniture",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
@@ -1280,6 +1500,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = false,
+                            IsOfficePickupEligible = false,
                             Name = "Jobs",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
@@ -1289,6 +1510,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Services",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
@@ -1298,6 +1520,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Phones & Tablets",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000001"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1308,6 +1531,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Laptops & Computers",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000001"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1318,6 +1542,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "TVs & Audio",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000001"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1328,6 +1553,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Gaming",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000001"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1338,6 +1564,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Cameras",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000001"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1348,6 +1575,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Accessories",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000001"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1358,6 +1586,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Women's Clothing",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000002"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1368,6 +1597,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Men's Clothing",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000002"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1378,6 +1608,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Shoes",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000002"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1388,6 +1619,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Bags",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000002"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1398,6 +1630,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Watches & Jewellery",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000002"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1408,6 +1641,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = false,
+                            IsOfficePickupEligible = false,
                             Name = "Cars",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000003"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1418,6 +1652,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = false,
+                            IsOfficePickupEligible = false,
                             Name = "Motorcycles",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000003"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1428,6 +1663,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = false,
+                            IsOfficePickupEligible = false,
                             Name = "Trucks & Buses",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000003"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1438,6 +1674,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = false,
+                            IsOfficePickupEligible = false,
                             Name = "Vehicle Parts",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000003"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1448,6 +1685,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = false,
+                            IsOfficePickupEligible = false,
                             Name = "Houses & Apartments for Rent",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000004"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1458,6 +1696,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = false,
+                            IsOfficePickupEligible = false,
                             Name = "Houses & Apartments for Sale",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000004"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1468,6 +1707,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = false,
+                            IsOfficePickupEligible = false,
                             Name = "Land & Plots",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000004"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1478,6 +1718,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = false,
+                            IsOfficePickupEligible = false,
                             Name = "Commercial Property",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000004"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1488,6 +1729,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Furniture",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000005"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1498,6 +1740,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Home Appliances",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000005"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1508,6 +1751,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Kitchen & Dining",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000005"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1518,6 +1762,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Bedding & Decor",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000005"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1528,6 +1773,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = false,
+                            IsOfficePickupEligible = false,
                             Name = "Full-time",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000006"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1538,6 +1784,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = false,
+                            IsOfficePickupEligible = false,
                             Name = "Part-time",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000006"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1548,6 +1795,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = false,
+                            IsOfficePickupEligible = false,
                             Name = "Internships",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000006"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1558,6 +1806,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Repairs",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000007"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1568,6 +1817,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Beauty & Wellness",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000007"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1578,6 +1828,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Cleaning",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000007"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1588,6 +1839,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Events & Catering",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000007"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -1598,6 +1850,7 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                             AttributeSchemaVersion = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             IsFreeEligible = true,
+                            IsOfficePickupEligible = false,
                             Name = "Tutoring & Lessons",
                             ParentCategoryId = new Guid("c17a0000-0000-0000-0000-000000000007"),
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -2181,6 +2434,15 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                     b.HasIndex("BiometricVerificationId");
 
                     b.ToTable("VerificationAuditEntries", (string)null);
+                });
+
+            modelBuilder.Entity("Ogasela.Domain.OfficePickups.OfficePickupRequest", b =>
+                {
+                    b.HasOne("Ogasela.Domain.OfficePickups.OfficeBranch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Ogasela.Domain.Promotions.Category", b =>

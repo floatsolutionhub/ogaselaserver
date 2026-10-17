@@ -6,4 +6,5 @@ public sealed record CategoryResponse(
     Guid? ParentCategoryId,
     bool IsFreeEligible,
     int AttributeSchemaVersion,
-    string? ImageUrl);
+    string? ImageUrl,
+    bool IsOfficePickupEligible = false);

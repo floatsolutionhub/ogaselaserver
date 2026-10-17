@@ -2,6 +2,7 @@ using MediatR;
 using Ogasela.Application.Analytics;
 using Microsoft.EntityFrameworkCore;
 using Ogasela.Application.Common.Interfaces;
+using Ogasela.Application.OfficePickups;
 using Ogasela.Domain.Listings;
 using Ogasela.Domain.Promotions;
 using Ogasela.Shared;
@@ -105,7 +106,8 @@ public sealed class GetListingQueryHandler : IRequestHandler<GetListingQuery, Re
             listing.TikTokUrl,
             listing.FacebookUrl,
             listing.InstagramUrl,
-            listing.YouTubeUrl));
+            listing.YouTubeUrl,
+            await OfficePickupRules.IsAvailableAsync(_dbContext, listing, cancellationToken)));
     }
 
     private async Task<bool> IsOwnerAsync(Listing listing, CancellationToken cancellationToken)

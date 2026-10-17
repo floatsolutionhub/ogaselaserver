@@ -8,6 +8,7 @@ using Ogasela.Domain.Marketing;
 using Ogasela.Domain.Messaging;
 using Ogasela.Domain.Moderation;
 using Ogasela.Domain.Notifications;
+using Ogasela.Domain.OfficePickups;
 using Ogasela.Domain.Payments;
 using Ogasela.Domain.Promotions;
 using Ogasela.Domain.Rbac;
@@ -41,6 +42,12 @@ public interface IApplicationDbContext
     DbSet<ProfileChangeRequest> ProfileChangeRequests { get; }
 
     DbSet<Dispute> Disputes { get; }
+
+    DbSet<OfficeBranch> OfficeBranches { get; }
+
+    DbSet<OfficePickupRequest> OfficePickupRequests { get; }
+
+    DbSet<OfficePickupActivity> OfficePickupActivities { get; }
 
     DbSet<Ogasela.Domain.Settings.PlatformSetting> PlatformSettings { get; }
 

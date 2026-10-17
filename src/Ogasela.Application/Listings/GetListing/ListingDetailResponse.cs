@@ -35,7 +35,8 @@ public sealed record ListingDetailResponse(
     string? TikTokUrl = null,
     string? FacebookUrl = null,
     string? InstagramUrl = null,
-    string? YouTubeUrl = null);
+    string? YouTubeUrl = null,
+    bool OfficePickupAvailable = false);
 
 /// <summary>
 /// Phone is only filled in for a signed-in caller, so seller numbers can't be scraped

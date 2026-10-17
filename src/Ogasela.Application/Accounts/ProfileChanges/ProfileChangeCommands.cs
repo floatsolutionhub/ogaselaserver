@@ -62,6 +62,17 @@ public static class ProfileChangeErrors
 
     public static readonly Error NotPending = new(
         "ProfileChange.NotPending", "This change request has already been reviewed.");
+
+    public static Error AlreadyPending(ProfileChangeType type) => new(
+        "ProfileChange.AlreadyPending",
+        $"You already have a {Describe(type)} change waiting for review. You can submit another once it's approved or rejected, or withdraw it first.");
+
+    private static string Describe(ProfileChangeType type) => type switch
+    {
+        ProfileChangeType.Phone => "phone number",
+        ProfileChangeType.Email => "email",
+        _ => "business info"
+    };
 }
 
 /// <summary>Contact-change codes get their own key namespace, so they can't be confused with login or reset codes.</summary>
@@ -165,6 +176,11 @@ public sealed class ProfileChangeHandlers :
             return Result.Failure(AccountErrors.UserNotFound);
         }
 
+        if (await HasPendingAsync(user.Id, request.Type, cancellationToken))
+        {
+            return Result.Failure(ProfileChangeErrors.AlreadyPending(request.Type));
+        }
+
         var value = ContactValue.Normalize(request.Type, request.Value);
         var check = await CheckNewValueAsync(user, request.Type, value, cancellationToken);
         if (check.IsFailure)
@@ -214,6 +230,11 @@ public sealed class ProfileChangeHandlers :
             return Result.Failure<ProfileChangeResponse>(AccountErrors.UserNotFound);
         }
 
+        if (await HasPendingAsync(user.Id, request.Type, cancellationToken))
+        {
+            return Result.Failure<ProfileChangeResponse>(ProfileChangeErrors.AlreadyPending(request.Type));
+        }
+
         var value = ContactValue.Normalize(request.Type, request.Value);
         var check = await CheckNewValueAsync(user, request.Type, value, cancellationToken);
         if (check.IsFailure)
@@ -233,8 +254,7 @@ public sealed class ProfileChangeHandlers :
                 return Result.Failure<ProfileChangeResponse>(AccountErrors.OtpRateLimited);
         }
 
-        var change = await ReplacePendingAsync(
-            user.Id, request.Type, ProfileChangeRequest.ForContact(user.Id, request.Type, value, _dateTime.UtcNow), cancellationToken);
+        var change = await AddAsync(ProfileChangeRequest.ForContact(user.Id, request.Type, value, _dateTime.UtcNow), cancellationToken);
         return Result.Success(ProfileChangeResponse.From(change));
     }
 
@@ -247,6 +267,11 @@ public sealed class ProfileChangeHandlers :
             return Result.Failure<ProfileChangeResponse>(ProfileChangeErrors.SellersOnly);
         }
 
+        if (await HasPendingAsync(userId, ProfileChangeType.BusinessInfo, cancellationToken))
+        {
+            return Result.Failure<ProfileChangeResponse>(ProfileChangeErrors.AlreadyPending(ProfileChangeType.BusinessInfo));
+        }
+
         var businessName = request.BusinessName.Trim();
         var storeAddress = request.StoreAddress?.Trim() ?? string.Empty;
         if (businessName == seller.BusinessName && storeAddress == (seller.StoreAddress ?? string.Empty))
@@ -254,8 +279,7 @@ public sealed class ProfileChangeHandlers :
             return Result.Failure<ProfileChangeResponse>(ProfileChangeErrors.NoChange);
         }
 
-        var change = await ReplacePendingAsync(
-            userId, ProfileChangeType.BusinessInfo,
+        var change = await AddAsync(
             ProfileChangeRequest.ForBusinessInfo(userId, businessName, storeAddress, _dateTime.UtcNow), cancellationToken);
         return Result.Success(ProfileChangeResponse.From(change));
     }
@@ -302,18 +326,13 @@ public sealed class ProfileChangeHandlers :
             : Result.Success();
     }
 
-    /// <summary>One pending request per type: a new one supersedes whatever was still waiting.</summary>
-    private async Task<ProfileChangeRequest> ReplacePendingAsync(
-        Guid userId, ProfileChangeType type, ProfileChangeRequest change, CancellationToken cancellationToken)
-    {
-        var pending = await _dbContext.ProfileChangeRequests
-            .Where(r => r.UserId == userId && r.Type == type && r.Status == ProfileChangeStatus.PendingReview)
-            .ToListAsync(cancellationToken);
-        foreach (var old in pending)
-        {
-            old.Cancel();
-        }
+    /// <summary>One pending request per type: a new one can only be filed once the last is reviewed (or withdrawn).</summary>
+    private Task<bool> HasPendingAsync(Guid userId, ProfileChangeType type, CancellationToken cancellationToken) =>
+        _dbContext.ProfileChangeRequests.AnyAsync(
+            r => r.UserId == userId && r.Type == type && r.Status == ProfileChangeStatus.PendingReview, cancellationToken);
 
+    private async Task<ProfileChangeRequest> AddAsync(ProfileChangeRequest change, CancellationToken cancellationToken)
+    {
         _dbContext.ProfileChangeRequests.Add(change);
         await _dbContext.SaveChangesAsync(cancellationToken);
         return change;

@@ -6,7 +6,7 @@ using Ogasela.Application.Accounts;
 
 namespace Ogasela.IntegrationTests.Accounts;
 
-/// <summary>The master OTP (Default_Global_OTP) must never be honoured when the app runs as Production.</summary>
+/// <summary>The master OTP (Default_Global_OTP) is honoured in every environment, Production included.</summary>
 public class MasterOtpEnvironmentTests : IClassFixture<AccountsApiFactory>
 {
     private const string MasterCode = "246810";
@@ -18,9 +18,9 @@ public class MasterOtpEnvironmentTests : IClassFixture<AccountsApiFactory>
     }
 
     [Theory]
-    [InlineData("Production", null)]
-    [InlineData("Development", MasterCode)]
-    public void MasterCode_IsOnlyActiveOutsideProduction(string environment, string? expected)
+    [InlineData("Production")]
+    [InlineData("Development")]
+    public void MasterCode_IsActiveInEveryEnvironment(string environment)
     {
         using var app = _factory.WithWebHostBuilder(builder =>
         {
@@ -34,6 +34,6 @@ public class MasterOtpEnvironmentTests : IClassFixture<AccountsApiFactory>
 
         var settings = app.Services.GetRequiredService<IOptions<OtpSettings>>().Value;
 
-        settings.MasterCode.Should().Be(expected);
+        settings.MasterCode.Should().Be(MasterCode);
     }
 }

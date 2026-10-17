@@ -118,10 +118,10 @@ flows and is how integration tests read the code without an SMS inbox.
 **Master OTP.** `OtpSettings.MasterCode` (`Default_Global_OTP` in `.env`, config key
 `Otp:MasterCode`) is accepted by `OtpService.VerifyAsync` in place of the generated code for every
 OTP check, whether or not a code was sent; the generated code keeps working too. It still counts
-against the attempt limit, and each use is logged as a warning. It is **never honoured in the
-Production environment**: `Program.cs` clears it there whatever `.env` says (logging that it was
-ignored), and logs a startup warning when it's active anywhere else - see
-`MasterOtpEnvironmentTests`. Note an unset `ASPNETCORE_ENVIRONMENT` means Production.
+against the attempt limit, and each use is logged as a warning. It is **honoured in every
+environment, Production included** (by explicit request) - leave `Default_Global_OTP` empty to
+turn it off. `Program.cs` logs a startup warning whenever it's active - see
+`MasterOtpEnvironmentTests`.
 
 **Refresh token rotation.** `AuthTokenIssuer` (`Application/Accounts`) is the single place that
 mints an access/refresh pair and persists the (hashed) refresh token; both `LoginCommandHandler`
@@ -160,7 +160,7 @@ used by every module, not owned by one) providing outbound SMS and branded email
   below). `Application/Accounts/NigerianPhoneNumber.ToInternationalFormat` converts the app's
   local `0…` numbers to the `234…` format Termii expects.
 - **`IEmailSender`** — implemented by `SmtpEmailSender` (MailKit), sending through Brevo's
-  SMTP relay (`smtp-relay.brevo.com:587`, STARTTLS). Sender identity is "Olive from Ogasela"
+  SMTP relay (`smtp-relay.brevo.com:2525`, STARTTLS - 2525 rather than 587 because many networks, including the dev machine's, block 587; override with `EMAIL_SMTP_PORT`). Sender identity is "Olive from Ogasela"
   &lt;support@ogasela.com&gt;.
 - **`BrandedEmailTemplate.Render(...)`** (`Application/Notifications`) — the single shell
   every outbound email goes through: a card layout, "Ogasela" wordmark, brand green
@@ -249,3 +249,32 @@ can lag and never reach a local API). Settlement is idempotent, and if a confirm
 submit the listing (already paid another way, no longer eligible, underpaid) the money goes to the
 seller's wallet - it's never lost. A settled listing goes to `PendingReview` (or live if
 `Listings:RequireApproval` is off); a rejection refunds the plan to the wallet.
+
+**Office pickup.** A buyer pays Ogasela an ad's price plus 3% (`OfficePickupRules.ServiceFeeRate`),
+the seller drops the item at an `OfficeBranch`, staff inspect it, and the buyer collects it (or it's
+delivered). Code lives in `Domain/OfficePickups`, `Application/OfficePickups` (app side) and
+`Application/Admin/OfficePickups` (Control Portal). It's offered only when the ad's category or its
+parent has `Category.IsOfficePickupEligible` (set in the portal), the ad is live and has a price -
+`OfficePickupRules.IsAvailableAsync`, surfaced as `ListingDetailResponse.OfficePickupAvailable`.
+The payment is **not** a wallet `Transaction` (buyers have no seller wallet): it's tracked on
+`OfficePickupRequest.PaymentReference`, started with `IPaymentGateway.InitializeCustomerTransactionAsync`
+and settled by `OfficePickupPaymentSettlement` from either the webhook (which falls back to it when
+no Transaction matches the reference) or `POST /office-pickups/{id}/confirm-payment`. Settlement
+emails the buyer a receipt and notifies both parties. Each staff step adds an `OfficePickupActivity`
+(the timeline the app shows) and notifies via `OfficePickupNotifier` (inbox entry with
+`OfficePickupId` + push using the payload's own title/body) - transactional, so not subject to the
+notification-preference toggles. A refund (`officepickup.refund`) pays back the total less 1% of
+the item price (`CancellationFeeRate`) through `ProcessPartialRefundAsync`; the request is claimed
+first under its xmin token so two staff can't refund it twice. The 3%/1% figures are quoted in the
+app and in both Terms of Service (app `(modals)/terms.tsx`, website `terms-and-conditions`) - change
+them together. See `IntegrationTests/Payments/OfficePickupTests.cs`.
+
+**Verified sign-in.** `User.EmailVerifiedAt`/`PhoneVerifiedAt` record proven ownership. Every
+consumer sign-in must go through a verified email or phone: `LoginCommandHandler` sends the code to
+the identifier signed in with, plus the other contact only if it's verified. If the identifier
+isn't verified, the code goes there alone, the response has `VerificationRequired: true`, and
+`VerifyLoginOtpCommandHandler` marks it verified on success. Codes are keyed by that identifier
+(`LoginOtpKey`: bare phone, or `email:` for email). Contacts also become verified through
+`otp/verify` (phone), an approved contact change (proven by code before filing), and social sign-in
+when the provider vouches for the email. Note the master OTP passes these checks too. See
+`IntegrationTests/Accounts/ContactVerificationTests.cs`.

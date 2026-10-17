@@ -136,6 +136,41 @@ public class ListingCheckoutTests : IClassFixture<PaymentsApiFactory>
         (await GetWalletAsync(client)).BalanceKobo.Should().Be(BasicPlanPriceKobo, "a double payment must never be lost");
     }
 
+    [Fact]
+    public async Task ClosingThePaymentPageWithoutPaying_RecordsACancelledPayment_ButALateSuccessStillSubmits()
+    {
+        var client = await RegisterAndVerifySellerAsync(_factory);
+        var listing = await CreateDraftListingAsync(client, CategorySeedData.PhonesAndTabletsId, null);
+        var started = await CheckoutAsync(client, listing.Id, PromotionPlanSeedData.BasicId, ListingPaymentMethod.Card);
+        _gatewayHost.Gateway.MarkAbandoned(started.PaymentReference!);
+
+        var response = await client.PostAsync($"/api/v1/listings/{listing.Id}/checkout/{started.PaymentReference}/cancel", null);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var cancelled = (await response.Content.ReadFromJsonAsync<ListingCheckoutResponse>(JsonOptions))!;
+
+        cancelled.Outcome.Should().Be(ListingCheckoutOutcome.PaymentCancelled);
+        cancelled.Listing.Status.Should().Be(ListingStatus.Draft);
+        (await PlanChargesAsync(listing.Id)).Should().ContainSingle(t => t.Status == TransactionStatus.Cancelled);
+
+        // The bank confirms after all (e.g. a transfer that landed late): the money must not be lost.
+        _gatewayHost.Gateway.MarkSucceeded(started.PaymentReference!);
+        (await SendWebhookAsync(started.PaymentReference!)).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await GetListingAsync(client, listing.Id)).Status.Should().Be(ListingStatus.PendingReview);
+    }
+
+    [Fact]
+    public async Task ClosingThePaymentPageAfterPaying_SettlesInsteadOfCancelling()
+    {
+        var client = await RegisterAndVerifySellerAsync(_factory);
+        var listing = await CreateDraftListingAsync(client, CategorySeedData.PhonesAndTabletsId, null);
+        var started = await CheckoutAsync(client, listing.Id, PromotionPlanSeedData.BasicId, ListingPaymentMethod.Card);
+
+        var response = await client.PostAsync($"/api/v1/listings/{listing.Id}/checkout/{started.PaymentReference}/cancel", null);
+        var result = (await response.Content.ReadFromJsonAsync<ListingCheckoutResponse>(JsonOptions))!;
+
+        result.Outcome.Should().Be(ListingCheckoutOutcome.Submitted);
+    }
+
     private static async Task<ListingCheckoutResponse> CheckoutAsync(
         HttpClient client, Guid listingId, Guid planId, ListingPaymentMethod method)
     {

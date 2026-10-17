@@ -5,5 +5,8 @@ public enum TransactionStatus
     Pending,
     Success,
     Failed,
-    Refunded
+    Refunded,
+
+    /// <summary>The payer left the gateway checkout without paying. Settled after all if the gateway later reports it paid.</summary>
+    Cancelled
 }

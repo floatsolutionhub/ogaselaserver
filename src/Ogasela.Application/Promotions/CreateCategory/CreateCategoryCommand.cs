@@ -12,4 +12,5 @@ public sealed record CreateCategoryCommand(
     Stream? Image,
     string? ImageFileName,
     string? ImageContentType,
-    IReadOnlyList<string> SubcategoryNames) : IRequest<Result<CategoryResponse>>;
+    IReadOnlyList<string> SubcategoryNames,
+    bool IsOfficePickupEligible = false) : IRequest<Result<CategoryResponse>>;

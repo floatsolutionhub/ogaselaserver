@@ -110,6 +110,14 @@ public sealed class UserDocumentHandlers :
             return Result.Failure<UserDocumentResponse>(AccountErrors.VerifiedBusinessLocked);
         }
 
+        // One submission per document type at a time: wait for the pending one to be reviewed.
+        if (await _dbContext.UserDocuments.AnyAsync(
+                d => d.UserId == _currentUser.UserId && d.Type == request.Type && d.Status == UserDocumentStatus.PendingReview,
+                cancellationToken))
+        {
+            return Result.Failure<UserDocumentResponse>(AccountErrors.DocumentAlreadyPending);
+        }
+
         var key = await _storage.UploadAsync(request.FileName, request.ContentType, request.File, cancellationToken);
         var document = UserDocument.Create(
             _currentUser.UserId!.Value,

@@ -30,6 +30,9 @@ public class InboxNotification
     /// <summary>Set for dispute notifications - tapping them opens that dispute.</summary>
     public Guid? DisputeId { get; private set; }
 
+    /// <summary>Set for office pickup notifications - tapping them opens that request.</summary>
+    public Guid? OfficePickupId { get; private set; }
+
     /// <summary>How many events this entry stands for (above 1 only for grouped chat messages).</summary>
     public int Count { get; private set; }
 
@@ -44,10 +47,11 @@ public class InboxNotification
 
     public static InboxNotification Create(
         Guid userId, string type, string title, string body, Guid? listingId, Guid? conversationId, DateTime now,
-        Guid? disputeId = null) => new()
+        Guid? disputeId = null, Guid? officePickupId = null) => new()
     {
         Id = Guid.NewGuid(),
         DisputeId = disputeId,
+        OfficePickupId = officePickupId,
         UserId = userId,
         Type = type,
         Title = title,

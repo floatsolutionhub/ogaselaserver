@@ -42,9 +42,13 @@ public sealed class PaystackGateway : IPaymentGateway
     public string ProviderName => Name;
 
     public async Task<Result<PaymentInitialization>> InitializeTransactionAsync(
-        Guid sellerId, decimal amountKobo, string purpose, CancellationToken cancellationToken)
+        Guid sellerId, decimal amountKobo, string purpose, CancellationToken cancellationToken) =>
+        await InitializeCustomerTransactionAsync(
+            await ResolveSellerEmailAsync(sellerId, cancellationToken), amountKobo, purpose, cancellationToken);
+
+    public async Task<Result<PaymentInitialization>> InitializeCustomerTransactionAsync(
+        string email, decimal amountKobo, string purpose, CancellationToken cancellationToken)
     {
-        var email = await ResolveSellerEmailAsync(sellerId, cancellationToken);
         var reference = $"ogasela-{Guid.NewGuid():N}";
 
         var payload = new InitializeRequest(email, (long)amountKobo, reference, _settings.CallbackUrl);
@@ -88,14 +92,28 @@ public sealed class PaystackGateway : IPaymentGateway
             return Result.Failure<PaymentVerificationResult>(PaymentErrors.GatewayError);
         }
 
-        var successful = string.Equals(parsed.Data.Status, "success", StringComparison.OrdinalIgnoreCase);
-        return Result.Success(new PaymentVerificationResult(successful, parsed.Data.Reference, parsed.Data.Amount));
+        // https://paystack.com/docs/api/transaction/#verify - "abandoned" is also what a checkout
+        // nobody has paid on yet reports; ongoing/pending/processing/queued are still in flight.
+        var state = parsed.Data.Status.ToLowerInvariant() switch
+        {
+            "success" => PaymentAttemptState.Succeeded,
+            "failed" or "reversed" => PaymentAttemptState.Failed,
+            "abandoned" => PaymentAttemptState.Abandoned,
+            _ => PaymentAttemptState.Pending
+        };
+        return Result.Success(new PaymentVerificationResult(
+            state == PaymentAttemptState.Succeeded, parsed.Data.Reference, parsed.Data.Amount, state));
     }
 
-    public async Task<Result> ProcessRefundAsync(string transactionReference, CancellationToken cancellationToken)
+    public Task<Result> ProcessRefundAsync(string transactionReference, CancellationToken cancellationToken) =>
+        RefundAsync(new RefundRequest(transactionReference, null), cancellationToken);
+
+    public Task<Result> ProcessPartialRefundAsync(string transactionReference, decimal amountKobo, CancellationToken cancellationToken) =>
+        RefundAsync(new RefundRequest(transactionReference, (long)amountKobo), cancellationToken);
+
+    private async Task<Result> RefundAsync(RefundRequest request, CancellationToken cancellationToken)
     {
-        using var response = await _httpClient.PostAsJsonAsync(
-            "refund", new RefundRequest(transactionReference), cancellationToken);
+        using var response = await _httpClient.PostAsJsonAsync("refund", request, RefundJsonOptions, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -169,7 +187,16 @@ public sealed class PaystackGateway : IPaymentGateway
         [property: JsonPropertyName("reference")] string Reference,
         [property: JsonPropertyName("amount")] decimal Amount);
 
-    private sealed record RefundRequest([property: JsonPropertyName("transaction")] string Transaction);
+    // Omits a null amount so Paystack refunds the full charge.
+    private static readonly JsonSerializerOptions RefundJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    /// <param name="Amount">In kobo; null refunds the full charge.</param>
+    private sealed record RefundRequest(
+        [property: JsonPropertyName("transaction")] string Transaction,
+        [property: JsonPropertyName("amount")] long? Amount);
 
     private sealed record WebhookPayload([property: JsonPropertyName("data")] WebhookData? Data);
 

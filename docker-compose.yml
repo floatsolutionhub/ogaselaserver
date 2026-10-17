@@ -14,6 +14,8 @@ services:
       Otp__MasterCode: "${Default_Global_OTP:-}"
       Termii__ApiKey: "${TERMII_API_KEY:?TERMII_API_KEY is not set - copy .env.example to .env and fill it in}"
       Email__SmtpKey: "${EMAIL_SMTP_KEY:?EMAIL_SMTP_KEY is not set - copy .env.example to .env and fill it in}"
+      # Optional - defaults to 2525 (appsettings.json). Brevo also listens on 587, which many ISPs block.
+      Email__Port: "${EMAIL_SMTP_PORT:-2525}"
       Verification__Provider: "Aws"
       Aws__Region: "${AWS_REGION:?AWS_REGION is not set - copy .env.example to .env and fill it in}"
       Aws__AccessKeyId: "${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID is not set - copy .env.example to .env and fill it in}"

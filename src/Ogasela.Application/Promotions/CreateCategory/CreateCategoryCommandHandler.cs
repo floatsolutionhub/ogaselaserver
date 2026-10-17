@@ -49,6 +49,8 @@ public sealed class CreateCategoryCommandHandler : IRequestHandler<CreateCategor
         var category = Category.Create(
             Guid.NewGuid(), request.Name, request.ParentCategoryId, request.IsFreeEligible,
             request.AttributeSchemaVersion, imageKey, now);
+        // Subcategories don't need their own flag: a parent's office pickup setting covers them.
+        category.SetOfficePickupEligible(request.IsOfficePickupEligible, now);
 
         _dbContext.Categories.Add(category);
 
@@ -70,6 +72,7 @@ public sealed class CreateCategoryCommandHandler : IRequestHandler<CreateCategor
             category.ParentCategoryId,
             category.IsFreeEligible,
             category.AttributeSchemaVersion,
-            imageKey is null ? null : _imageStorage.GetImageUrl(imageKey)));
+            imageKey is null ? null : _imageStorage.GetImageUrl(imageKey),
+            category.IsOfficePickupEligible));
     }
 }

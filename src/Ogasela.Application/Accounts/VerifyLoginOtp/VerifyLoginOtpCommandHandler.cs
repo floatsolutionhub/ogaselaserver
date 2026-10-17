@@ -11,12 +11,15 @@ public sealed class VerifyLoginOtpCommandHandler : IRequestHandler<VerifyLoginOt
     private readonly IApplicationDbContext _dbContext;
     private readonly IOtpService _otpService;
     private readonly AuthTokenIssuer _tokenIssuer;
+    private readonly IDateTime _dateTime;
 
-    public VerifyLoginOtpCommandHandler(IApplicationDbContext dbContext, IOtpService otpService, AuthTokenIssuer tokenIssuer)
+    public VerifyLoginOtpCommandHandler(
+        IApplicationDbContext dbContext, IOtpService otpService, AuthTokenIssuer tokenIssuer, IDateTime dateTime)
     {
         _dbContext = dbContext;
         _otpService = otpService;
         _tokenIssuer = tokenIssuer;
+        _dateTime = dateTime;
     }
 
     public async Task<Result<AuthTokenResponse>> Handle(VerifyLoginOtpCommand request, CancellationToken cancellationToken)
@@ -26,12 +29,14 @@ public sealed class VerifyLoginOtpCommandHandler : IRequestHandler<VerifyLoginOt
                  (request.Email != null && u.Email == request.Email),
             cancellationToken);
 
-        if (user is null || string.IsNullOrWhiteSpace(user.Phone))
+        var byPhone = request.Phone is not null;
+        if (user is null || (byPhone ? string.IsNullOrWhiteSpace(user.Phone) : string.IsNullOrWhiteSpace(user.Email)))
         {
             return Result.Failure<AuthTokenResponse>(AccountErrors.InvalidCredentials);
         }
 
-        var verifyResult = await _otpService.VerifyAsync(user.Phone, request.Code, cancellationToken);
+        var verifyResult = await _otpService.VerifyAsync(
+            LoginOtpKey.For(byPhone ? user.Phone : null, byPhone ? null : user.Email), request.Code, cancellationToken);
 
         var errorResult = verifyResult switch
         {
@@ -50,6 +55,17 @@ public sealed class VerifyLoginOtpCommandHandler : IRequestHandler<VerifyLoginOt
         if (user.IsSuspended)
         {
             return Result.Failure<AuthTokenResponse>(AccountErrors.AccountSuspended);
+        }
+
+        // The code was always sent to the identifier they signed in with, so entering it proves
+        // they own it. Saved by IssueAsync below along with the refresh token.
+        if (byPhone)
+        {
+            user.MarkPhoneVerified(_dateTime.UtcNow);
+        }
+        else
+        {
+            user.MarkEmailVerified(_dateTime.UtcNow);
         }
 
         var response = await _tokenIssuer.IssueAsync(user, tokenToRotate: null, cancellationToken);

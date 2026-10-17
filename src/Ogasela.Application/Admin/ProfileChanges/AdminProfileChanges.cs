@@ -142,9 +142,11 @@ public sealed class AdminProfileChangeHandlers :
                     return Result.Failure(AdminProfileChangeErrors.NowInUse);
                 }
 
+                // The user proved they own the new value with a code before filing the change.
                 user.UpdateContactDetails(
                     change.Type == ProfileChangeType.Phone ? change.NewValue : null,
-                    change.Type == ProfileChangeType.Email ? change.NewValue : null);
+                    change.Type == ProfileChangeType.Email ? change.NewValue : null,
+                    verifiedAt: _dateTime.UtcNow);
             }
             else
             {

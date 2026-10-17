@@ -19,4 +19,5 @@ public static class InboxNotificationTypes
     public const string DisputeOpened = "DisputeOpened";
     public const string DisputeUpdate = "DisputeUpdate";
     public const string DisputeResolved = "DisputeResolved";
+    public const string OfficePickupUpdate = "OfficePickupUpdate";
 }

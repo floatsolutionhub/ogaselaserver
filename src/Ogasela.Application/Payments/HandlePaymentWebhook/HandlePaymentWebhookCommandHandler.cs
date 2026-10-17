@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Ogasela.Application.Common.Interfaces;
 using Ogasela.Application.Listings.Checkout;
+using Ogasela.Application.OfficePickups;
 using Ogasela.Domain.Payments;
 using Ogasela.Shared;
 
@@ -22,11 +23,14 @@ public sealed class HandlePaymentWebhookCommandHandler : IRequestHandler<HandleP
     private readonly IPaymentGatewayResolver _gatewayResolver;
     private readonly ILogger<HandlePaymentWebhookCommandHandler> _logger;
     private readonly ListingPaymentSettlement _listingSettlement;
+    private readonly OfficePickupPaymentSettlement _officePickupSettlement;
 
     public HandlePaymentWebhookCommandHandler(
         IApplicationDbContext dbContext, IDateTime dateTime, IPaymentGatewayResolver gatewayResolver,
-        ILogger<HandlePaymentWebhookCommandHandler> logger, ListingPaymentSettlement listingSettlement)
+        ILogger<HandlePaymentWebhookCommandHandler> logger, ListingPaymentSettlement listingSettlement,
+        OfficePickupPaymentSettlement officePickupSettlement)
     {
+        _officePickupSettlement = officePickupSettlement;
         _listingSettlement = listingSettlement;
         _dbContext = dbContext;
         _dateTime = dateTime;
@@ -61,12 +65,26 @@ public sealed class HandlePaymentWebhookCommandHandler : IRequestHandler<HandleP
 
         if (transaction is null)
         {
+            // A buyer's office pickup payment isn't a wallet Transaction - it's tracked on the request itself.
+            var pickup = await _dbContext.OfficePickupRequests.FirstOrDefaultAsync(r => r.PaymentReference == reference, cancellationToken);
+            if (pickup is not null)
+            {
+                var pickupVerification = await gateway.VerifyTransactionAsync(reference, cancellationToken);
+                if (pickupVerification.IsFailure)
+                {
+                    return Result.Failure(PaymentErrors.GatewayError);
+                }
+
+                await _officePickupSettlement.SettleAsync(pickup, pickupVerification.Value, cancellationToken);
+                return Result.Success();
+            }
+
             _logger.LogWarning(
                 "A {Provider} webhook referenced an unknown transaction {Reference}", request.Provider, reference);
             return Result.Failure(PaymentErrors.TransactionNotFound);
         }
 
-        if (transaction.Status != TransactionStatus.Pending)
+        if (!transaction.IsAwaitingSettlement)
         {
             // Already processed by an earlier delivery of this same webhook - a safe no-op.
             return Result.Success();
@@ -101,7 +119,7 @@ public sealed class HandlePaymentWebhookCommandHandler : IRequestHandler<HandleP
 
         await _dbContext.ExecuteInTransactionAsync(async () =>
         {
-            if (transaction.Status != TransactionStatus.Pending)
+            if (!transaction.IsAwaitingSettlement)
             {
                 return;
             }

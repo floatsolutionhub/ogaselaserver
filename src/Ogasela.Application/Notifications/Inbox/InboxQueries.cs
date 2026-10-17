@@ -15,7 +15,8 @@ public sealed record InboxNotificationResponse(
     int Count,
     bool IsRead,
     DateTime UpdatedAt,
-    Guid? DisputeId = null);
+    Guid? DisputeId = null,
+    Guid? OfficePickupId = null);
 
 public sealed record InboxPageResponse(IReadOnlyList<InboxNotificationResponse> Items, int Page, int PageSize, int TotalCount, int UnreadCount);
 
@@ -61,7 +62,7 @@ public sealed class InboxHandlers :
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(n => new InboxNotificationResponse(
-                n.Id, n.Type, n.Title, n.Body, n.ListingId, n.ConversationId, n.Count, n.ReadAt != null, n.UpdatedAt, n.DisputeId))
+                n.Id, n.Type, n.Title, n.Body, n.ListingId, n.ConversationId, n.Count, n.ReadAt != null, n.UpdatedAt, n.DisputeId, n.OfficePickupId))
             .ToListAsync(cancellationToken);
 
         return Result.Success(new InboxPageResponse(items, page, pageSize, total, unread));

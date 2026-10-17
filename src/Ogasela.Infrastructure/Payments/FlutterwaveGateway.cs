@@ -44,9 +44,13 @@ public sealed class FlutterwaveGateway : IPaymentGateway
     public string ProviderName => Name;
 
     public async Task<Result<PaymentInitialization>> InitializeTransactionAsync(
-        Guid sellerId, decimal amountKobo, string purpose, CancellationToken cancellationToken)
+        Guid sellerId, decimal amountKobo, string purpose, CancellationToken cancellationToken) =>
+        await InitializeCustomerTransactionAsync(
+            await ResolveSellerEmailAsync(sellerId, cancellationToken), amountKobo, purpose, cancellationToken);
+
+    public async Task<Result<PaymentInitialization>> InitializeCustomerTransactionAsync(
+        string email, decimal amountKobo, string purpose, CancellationToken cancellationToken)
     {
-        var email = await ResolveSellerEmailAsync(sellerId, cancellationToken);
         var reference = $"ogasela-{Guid.NewGuid():N}";
 
         var payload = new InitializeRequest(
@@ -82,11 +86,24 @@ public sealed class FlutterwaveGateway : IPaymentGateway
             return Result.Failure<PaymentVerificationResult>(PaymentErrors.GatewayError);
         }
 
-        var successful = string.Equals(verification.Status, "successful", StringComparison.OrdinalIgnoreCase);
-        return Result.Success(new PaymentVerificationResult(successful, verification.TxRef, ToKobo(verification.Amount)));
+        var state = verification.Status.ToLowerInvariant() switch
+        {
+            "successful" => PaymentAttemptState.Succeeded,
+            "failed" => PaymentAttemptState.Failed,
+            "cancelled" => PaymentAttemptState.Abandoned,
+            _ => PaymentAttemptState.Pending
+        };
+        return Result.Success(new PaymentVerificationResult(
+            state == PaymentAttemptState.Succeeded, verification.TxRef, ToKobo(verification.Amount), state));
     }
 
-    public async Task<Result> ProcessRefundAsync(string transactionReference, CancellationToken cancellationToken)
+    public Task<Result> ProcessRefundAsync(string transactionReference, CancellationToken cancellationToken) =>
+        RefundAsync(transactionReference, null, cancellationToken);
+
+    public Task<Result> ProcessPartialRefundAsync(string transactionReference, decimal amountKobo, CancellationToken cancellationToken) =>
+        RefundAsync(transactionReference, amountKobo, cancellationToken);
+
+    private async Task<Result> RefundAsync(string transactionReference, decimal? amountKobo, CancellationToken cancellationToken)
     {
         // Flutterwave's refund endpoint needs the numeric transaction id, not the tx_ref, so it
         // must be resolved first.
@@ -97,7 +114,7 @@ public sealed class FlutterwaveGateway : IPaymentGateway
         }
 
         using var response = await _httpClient.PostAsJsonAsync(
-            $"transactions/{verification.Id}/refund", new RefundRequest(verification.Amount), cancellationToken);
+            $"transactions/{verification.Id}/refund", new RefundRequest(amountKobo is { } kobo ? ToNaira(kobo) : verification.Amount), cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {

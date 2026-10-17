@@ -31,7 +31,8 @@ public sealed class GetCategoriesQueryHandler : IRequestHandler<GetCategoriesQue
                 c.ParentCategoryId,
                 c.IsFreeEligible,
                 c.AttributeSchemaVersion,
-                c.ImageS3Key is null ? null : _imageStorage.GetImageUrl(c.ImageS3Key)))
+                c.ImageS3Key is null ? null : _imageStorage.GetImageUrl(c.ImageS3Key),
+                c.IsOfficePickupEligible))
             .ToList();
 
         return Result.Success<IReadOnlyList<CategoryResponse>>(response);

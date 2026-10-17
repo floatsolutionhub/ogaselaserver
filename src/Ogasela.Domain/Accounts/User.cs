@@ -37,6 +37,20 @@ public class User
 
     public DateTime CreatedAt { get; private set; }
 
+    /// <summary>When the user proved they own Email (a code sent there, or a provider that vouches for it). Null = unverified.</summary>
+    public DateTime? EmailVerifiedAt { get; private set; }
+
+    /// <summary>When the user proved they own Phone (a code sent there by SMS). Null = unverified.</summary>
+    public DateTime? PhoneVerifiedAt { get; private set; }
+
+    public bool IsEmailVerified => Email is not null && EmailVerifiedAt is not null;
+
+    public bool IsPhoneVerified => Phone is not null && PhoneVerifiedAt is not null;
+
+    public void MarkEmailVerified(DateTime now) => EmailVerifiedAt ??= now;
+
+    public void MarkPhoneVerified(DateTime now) => PhoneVerifiedAt ??= now;
+
     public static User Create(string? phone, string? email, string passwordHash, UserRole role, string? name = null)
     {
         return new User
@@ -51,16 +65,19 @@ public class User
         };
     }
 
-    public void UpdateContactDetails(string? phone, string? email)
+    /// <param name="verifiedAt">Set when the new value was proven by a code sent to it; otherwise the changed value starts unverified.</param>
+    public void UpdateContactDetails(string? phone, string? email, DateTime? verifiedAt = null)
     {
-        if (phone is not null)
+        if (phone is not null && phone != Phone)
         {
             Phone = phone;
+            PhoneVerifiedAt = verifiedAt;
         }
 
-        if (email is not null)
+        if (email is not null && email != Email)
         {
             Email = email;
+            EmailVerifiedAt = verifiedAt;
         }
     }
 

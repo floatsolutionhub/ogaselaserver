@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Google.Apis.Auth.OAuth2;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -67,7 +68,7 @@ public sealed class PushNotificationChannel : INotificationChannel
                     message = new
                     {
                         token = user.PushToken,
-                        notification = new { title = BuildTitle(type), body = "You have a new notification on Ogasela." },
+                        notification = BuildNotification(type, payload),
                         data = new Dictionary<string, string> { ["type"] = type, ["payload"] = payload }
                     }
                 })
@@ -95,6 +96,27 @@ public sealed class PushNotificationChannel : INotificationChannel
         var serviceAccountCredential = CredentialFactory.FromJson<ServiceAccountCredential>(_settings.ServiceAccountJson);
         var credential = serviceAccountCredential.ToGoogleCredential().CreateScoped(Scopes);
         return await credential.UnderlyingCredential.GetAccessTokenForRequestAsync(cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Uses the payload's own "title"/"body" when it carries them; otherwise a generic line for the type.</summary>
+    private static object BuildNotification(string type, string payload)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            var root = document.RootElement;
+            if (root.ValueKind == JsonValueKind.Object
+                && root.TryGetProperty("title", out var title) && title.ValueKind == JsonValueKind.String
+                && root.TryGetProperty("body", out var body) && body.ValueKind == JsonValueKind.String)
+            {
+                return new { title = title.GetString(), body = body.GetString() };
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return new { title = BuildTitle(type), body = "You have a new notification on Ogasela." };
     }
 
     private static string BuildTitle(string type) => type switch

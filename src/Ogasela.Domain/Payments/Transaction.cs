@@ -64,5 +64,10 @@ public class Transaction
 
     public void MarkFailed() => Status = TransactionStatus.Failed;
 
+    public void MarkCancelled() => Status = TransactionStatus.Cancelled;
+
+    /// <summary>Not yet settled - Pending, or Cancelled by the payer (a late success still settles it).</summary>
+    public bool IsAwaitingSettlement => Status is TransactionStatus.Pending or TransactionStatus.Cancelled;
+
     public void MarkRefunded() => Status = TransactionStatus.Refunded;
 }

@@ -76,6 +76,10 @@ public sealed class UpdateCategoryCommandHandler : IRequestHandler<UpdateCategor
         }
 
         category.Update(request.Name, request.ParentCategoryId, request.IsFreeEligible, request.AttributeSchemaVersion, now);
+        if (request.IsOfficePickupEligible is { } officePickup)
+        {
+            category.SetOfficePickupEligible(officePickup, now);
+        }
 
         // Ads are posted under a subcategory, and RULE-04 (ListingPublishService) reads the
         // subcategory's own flag - so a top-level category's Free-plan setting only takes effect
@@ -111,6 +115,7 @@ public sealed class UpdateCategoryCommandHandler : IRequestHandler<UpdateCategor
             category.ParentCategoryId,
             category.IsFreeEligible,
             category.AttributeSchemaVersion,
-            category.ImageS3Key is null ? null : _imageStorage.GetImageUrl(category.ImageS3Key)));
+            category.ImageS3Key is null ? null : _imageStorage.GetImageUrl(category.ImageS3Key),
+            category.IsOfficePickupEligible));
     }
 }

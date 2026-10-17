@@ -16,10 +16,17 @@ public interface IPaymentGateway
     Task<Result<PaymentInitialization>> InitializeTransactionAsync(
         Guid sellerId, decimal amountKobo, string purpose, CancellationToken cancellationToken);
 
+    /// <summary>Like <see cref="InitializeTransactionAsync"/>, for a payer who isn't a seller (e.g. a buyer paying for an office pickup).</summary>
+    Task<Result<PaymentInitialization>> InitializeCustomerTransactionAsync(
+        string customerEmail, decimal amountKobo, string purpose, CancellationToken cancellationToken);
+
     /// <summary>Asks the gateway directly whether a transaction succeeded - the source of truth a webhook's claim is checked against.</summary>
     Task<Result<PaymentVerificationResult>> VerifyTransactionAsync(string reference, CancellationToken cancellationToken);
 
     Task<Result> ProcessRefundAsync(string transactionReference, CancellationToken cancellationToken);
+
+    /// <summary>Refunds part of a successful charge back to the payer's card/account.</summary>
+    Task<Result> ProcessPartialRefundAsync(string transactionReference, decimal amountKobo, CancellationToken cancellationToken);
 
     /// <summary>Verifies that a webhook payload genuinely came from this gateway.</summary>
     bool VerifyWebhookSignature(string rawBody, string? signatureHeaderValue);
@@ -30,4 +37,20 @@ public interface IPaymentGateway
 
 public sealed record PaymentInitialization(string Reference, string RedirectUrl);
 
-public sealed record PaymentVerificationResult(bool Successful, string Reference, decimal AmountKobo);
+/// <param name="State">What the payer did: paid, was declined, never paid (closed the page), or is still mid-payment (e.g. a bank transfer).</param>
+public sealed record PaymentVerificationResult(
+    bool Successful, string Reference, decimal AmountKobo, PaymentAttemptState State = PaymentAttemptState.Pending);
+
+public enum PaymentAttemptState
+{
+    Succeeded,
+
+    /// <summary>The charge was attempted and declined.</summary>
+    Failed,
+
+    /// <summary>The payer left the checkout without paying.</summary>
+    Abandoned,
+
+    /// <summary>Still in progress at the gateway or bank - may yet succeed, so it must not be cancelled.</summary>
+    Pending
+}

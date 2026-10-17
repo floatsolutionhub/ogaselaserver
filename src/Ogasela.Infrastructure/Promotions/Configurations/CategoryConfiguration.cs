@@ -56,6 +56,7 @@ public sealed class CategoryConfiguration : IEntityTypeConfiguration<Category>
         Name = name,
         ParentCategoryId = parentCategoryId,
         IsFreeEligible = isFreeEligible,
+        IsOfficePickupEligible = false,
         AttributeSchemaVersion = 1,
         ImageS3Key = (string?)null,
         CreatedAt = CategorySeedData.SeedTimestamp,
