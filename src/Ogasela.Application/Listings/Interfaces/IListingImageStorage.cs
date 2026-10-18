@@ -12,4 +12,11 @@ public interface IListingImageStorage
 {
     /// <summary>Uploads the image and returns its permanent public URL.</summary>
     Task<string> UploadAsync(string fileName, string contentType, Stream content, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Deletes a photo this storage uploaded. Returns false, without touching anything, for a URL it
+    /// didn't produce (MediaUrls can hold any https URL, so a seller-supplied one must never map to a
+    /// deletable key). Callers must check no listing still uses the URL first.
+    /// </summary>
+    Task<bool> DeleteAsync(string url, CancellationToken cancellationToken);
 }

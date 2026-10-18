@@ -1,3 +1,4 @@
+using Ogasela.Domain.Listings;
 using FluentValidation;
 
 namespace Ogasela.Application.Promotions.UpdatePromotionPlan;
@@ -24,7 +25,7 @@ internal static class PromotionPlanRules
             .WithName("Features");
         validator.RuleForEach(x => features(x)).MaximumLength(80).WithName("Feature");
         validator.RuleFor(x => durationDays(x)).InclusiveBetween(1, 365).WithName("DurationDays");
-        validator.RuleFor(x => photoLimit(x)).InclusiveBetween(1, 30).WithName("PhotoLimit");
+        validator.RuleFor(x => photoLimit(x)).InclusiveBetween(1, Listing.MaxPhotoCount).WithName("PhotoLimit");
         validator.RuleFor(x => boostWeight(x)).InclusiveBetween(0, 10).WithName("BoostWeight");
         validator.RuleFor(x => price(x)).GreaterThanOrEqualTo(0).WithName("Price");
         validator.RuleFor(x => bundledCredit(x)).GreaterThanOrEqualTo(0).WithName("BundledAdCreditKobo");

@@ -53,6 +53,7 @@ public sealed class RepostListingCommandHandler : IRequestHandler<RepostListingC
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await _publishService.FlushDroppedMediaAsync(cancellationToken);
 
         return Result.Success(ListingResponse.From(listing));
     }

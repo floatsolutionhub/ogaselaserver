@@ -1,3 +1,5 @@
+using Ogasela.Infrastructure.Listings;
+using Ogasela.Application.Listings.Interfaces;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -56,6 +58,46 @@ public class ListingCheckoutTests : IClassFixture<PaymentsApiFactory>
 
         var charges = await PlanChargesAsync(listing.Id);
         charges.Should().ContainSingle(t => t.Status == TransactionStatus.Success && t.AmountKobo == BasicPlanPriceKobo);
+    }
+
+    [Fact]
+    public async Task MorePhotosThanThePlanAllows_KeepsThemWhilePaymentIsPending_ThenKeepsOnlyThePlansFirstPhotos()
+    {
+        var client = await RegisterAndVerifySellerAsync(_factory);
+        var photos = Enumerable.Range(1, 10).Select(i => $"https://example.com/photo{i}.jpg").ToList();
+        var listing = await CreateDraftListingAsync(client, CategorySeedData.PhonesAndTabletsId, null, mediaUrls: photos);
+
+        // Basic allows 8 photos. Starting (and abandoning) a payment mustn't cost the seller any.
+        var started = await CheckoutAsync(client, listing.Id, PromotionPlanSeedData.BasicId, ListingPaymentMethod.Card);
+        started.Outcome.Should().Be(ListingCheckoutOutcome.PaymentRequired);
+        (await GetListingAsync(client, listing.Id)).MediaUrls.Should().HaveCount(10);
+
+        var confirmed = await ConfirmAsync(client, listing.Id, started.PaymentReference!);
+
+        confirmed.Outcome.Should().Be(ListingCheckoutOutcome.Submitted);
+        confirmed.Listing.MediaUrls.Should().Equal(photos.Take(8), "the first photos, cover first, are the ones kept");
+        (await GetListingAsync(client, listing.Id)).MediaUrls.Should().Equal(photos.Take(8));
+    }
+
+    [Fact]
+    public async Task DroppedPhotos_AreDeletedFromStorage_OnlyOnceTheAdIsSubmitted()
+    {
+        var client = await RegisterAndVerifySellerAsync(_factory);
+        var storage = (InMemoryListingImageStorage)_factory.Services.GetRequiredService<IListingImageStorage>();
+        var photos = new List<string>();
+        for (var i = 0; i < 10; i++)
+        {
+            photos.Add(await storage.UploadAsync($"photo{i}.jpg", "image/jpeg", new MemoryStream([1, 2, 3]), CancellationToken.None));
+        }
+
+        var listing = await CreateDraftListingAsync(client, CategorySeedData.PhonesAndTabletsId, null, mediaUrls: photos);
+        var started = await CheckoutAsync(client, listing.Id, PromotionPlanSeedData.BasicId, ListingPaymentMethod.Card);
+        photos.Should().OnlyContain(url => storage.Exists(url), "nothing is deleted while the payment is pending");
+
+        await ConfirmAsync(client, listing.Id, started.PaymentReference!);
+
+        photos.Take(8).Should().OnlyContain(url => storage.Exists(url));
+        photos.Skip(8).Should().OnlyContain(url => !storage.Exists(url), "Basic keeps 8 - the other 2 files are removed");
     }
 
     [Fact]
@@ -119,7 +161,7 @@ public class ListingCheckoutTests : IClassFixture<PaymentsApiFactory>
     }
 
     [Fact]
-    public async Task ACardPaymentConfirmedAfterTheAdWasAlreadyPaidFor_IsCreditedToTheWallet()
+    public async Task ACardPaymentConfirmedAfterTheAdWasAlreadyPaidFor_IsRefundedToTheCard()
     {
         var client = await RegisterAndVerifySellerAsync(_factory);
         var listing = await CreateDraftListingAsync(client, CategorySeedData.PhonesAndTabletsId, null);
@@ -133,7 +175,8 @@ public class ListingCheckoutTests : IClassFixture<PaymentsApiFactory>
         var late = await ConfirmAsync(client, listing.Id, card.PaymentReference!);
 
         late.Listing.Status.Should().Be(ListingStatus.PendingReview);
-        (await GetWalletAsync(client)).BalanceKobo.Should().Be(BasicPlanPriceKobo, "a double payment must never be lost");
+        _gatewayHost.Gateway.FullRefunds.Should().Contain(card.PaymentReference!, "a double payment must never be lost");
+        (await GetWalletAsync(client)).BalanceKobo.Should().Be(0m, "the wallet is switched off - refunds go back to the card");
     }
 
     [Fact]

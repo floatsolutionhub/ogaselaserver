@@ -237,18 +237,30 @@ because `Program.cs` reads `builder.Configuration.GetConnectionString(...)` befo
 minimal-hosting model to see them at that point.
 
 **Ad checkout (posting an ad).** A listing is a `Draft` from the app's first "Continue" until its
-plan is paid for - drafts may be partial (empty description, no photos). `POST
+plan is paid for - drafts may be partial (empty description, no photos) and hold up to
+`Listing.MaxPhotoCount` (30) photos whatever the plan; on submission (`ListingPublishService.SubmitAsync`)
+photos beyond the plan's `PhotoLimit` are dropped from the end, keeping the cover - not at checkout start,
+so an abandoned card payment never loses photos. The dropped files are deleted from storage by
+`ListingMediaCleanup` - only after the save that committed the trim (callers of `SubmitAsync` call
+`FlushDroppedMediaAsync` after saving), only for URLs our storage uploaded, and never while another
+listing still uses the URL. Best effort: a failed delete is logged, never fails the submission. On S3
+this needs `s3:DeleteObject` on the `listings/` prefix. `POST
 /listings/{id}/checkout` (`Application/Listings/Checkout/ListingCheckout.cs`) runs every publish
 rule except payment first (`ListingPublishService.CheckEligibilityAsync`: verified seller, title +
-description + at least one photo, the plan's photo limit, Free-plan rules), so money is never taken
+description + at least one photo, Free-plan rules), so money is never taken
 for an ad that can't be submitted. Free and Wallet settle in that call; Card creates a Pending
 `PlanPurchase` transaction linked to the listing and returns the gateway URL. A card payment is
 settled by `ListingPaymentSettlement` - called both by the payment webhook and by `POST
 .../checkout/{reference}/confirm` (the app calls it when the payment page closes, since webhooks
 can lag and never reach a local API). Settlement is idempotent, and if a confirmed payment can't
-submit the listing (already paid another way, no longer eligible, underpaid) the money goes to the
-seller's wallet - it's never lost. A settled listing goes to `PendingReview` (or live if
-`Listings:RequireApproval` is off); a rejection refunds the plan to the wallet.
+submit the listing (already paid another way, no longer eligible, underpaid) it's refunded to the
+payer's card/account - it's never lost. A settled listing goes to `PendingReview` (or live if
+`Listings:RequireApproval` is off); a rejection refunds the plan. Every plan refund goes through
+`PlanChargeRefunder` (`Application/Payments`): card payments back through the gateway (claimed under
+the Transaction's xmin first, put back if the gateway refuses - a rejection then fails with 502 and
+the ad stays in review), and only pre-existing wallet-paid charges back to the wallet. The wallet is
+switched off in the app for now (no top-ups, balance or wallet payment option), so don't add new
+code that credits it.
 
 **Office pickup.** A buyer pays Ogasela an ad's price plus 3% (`OfficePickupRules.ServiceFeeRate`),
 the seller drops the item at an `OfficeBranch`, staff inspect it, and the buyer collects it (or it's
@@ -278,3 +290,15 @@ isn't verified, the code goes there alone, the response has `VerificationRequire
 `otp/verify` (phone), an approved contact change (proven by code before filing), and social sign-in
 when the provider vouches for the email. Note the master OTP passes these checks too. See
 `IntegrationTests/Accounts/ContactVerificationTests.cs`.
+
+**Waiting list & testers.** The website's "Join waiting list" (shown instead of "Get the app" until
+the site's `NEXT_APP_LIVE=true`) and "Join our testers" forms post to `POST /marketing/waitlist` and
+`POST /marketing/testers`. Both go through `SubmitInterestSignupCommand`
+(`Application/Marketing/SubmitInterestSignup`) into one `InterestSignup` table, keyed by
+(`Kind`, lower-cased `Email`); a repeat signup is a silent success, and a new one gets a best-effort
+branded confirmation email. Both forms ask for the phone's OS (`DevicePlatform`, Android or IOS - required), so launch emails can
+point at the right store. `Consent` must be true - it's the NDPA lawful basis for keeping the row
+(`ConsentedAt`). Staff manage them on the Control Portal's Waitlist & Testers page
+(`Admin/InterestSignups`, `/admin/interest-signups`): `marketing.interest.view` to read,
+`marketing.interest.manage` to change status/notes, export CSV (audited, formula-safe) or delete. Delete
+is a hard delete for erasure requests, and its audit entry deliberately omits the name and email.

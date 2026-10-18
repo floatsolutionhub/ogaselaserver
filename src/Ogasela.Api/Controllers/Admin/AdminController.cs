@@ -66,7 +66,7 @@ public sealed class AdminController : ControllerBase
         return result.ToActionResult(this);
     }
 
-    /// <summary>Rejects a pending ad back to Draft with a reason the seller sees; a paid plan charge is refunded to their wallet.</summary>
+    /// <summary>Rejects a pending ad back to Draft with a reason the seller sees; a paid plan charge is refunded to the card or account it was paid with (older wallet payments go back to the wallet). If the payment provider refuses the refund, the ad stays in review and the call fails with 502 so it can be retried.</summary>
     [HttpPost("listings/{id:guid}/reject")]
     [Authorize(Roles = "Moderator,SuperAdmin")]
     public async Task<IActionResult> RejectListing(Guid id, RejectListingRequest request, CancellationToken cancellationToken)

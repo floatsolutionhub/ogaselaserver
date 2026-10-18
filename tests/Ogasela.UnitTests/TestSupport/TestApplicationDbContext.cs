@@ -120,7 +120,7 @@ public sealed class TestApplicationDbContext : DbContext, IApplicationDbContext
 
     public DbSet<ContactFormSubmission> ContactFormSubmissions => Set<ContactFormSubmission>();
 
-    public DbSet<TesterSignup> TesterSignups => Set<TesterSignup>();
+    public DbSet<InterestSignup> InterestSignups => Set<InterestSignup>();
 
     public DbSet<AccountDeletionRequest> AccountDeletionRequests => Set<AccountDeletionRequest>();
 

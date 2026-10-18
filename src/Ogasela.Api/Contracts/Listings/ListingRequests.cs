@@ -3,7 +3,7 @@ using Ogasela.Domain.Listings;
 
 namespace Ogasela.Api.Contracts.Listings;
 
-/// <summary>MediaUrls: at most Listing.MaxPhotoCount (5) URLs, each returned by POST api/v1/listings/images.
+/// <summary>MediaUrls: at most Listing.MaxPhotoCount (30) URLs; on submission only the first PromotionPlan.PhotoLimit are kept, each returned by POST api/v1/listings/images.
 /// HasOriginalReceipt only counts for Used items. The social links are optional and must point at that platform.</summary>
 public sealed record CreateListingRequest(
     string Title,
@@ -22,7 +22,7 @@ public sealed record CreateListingRequest(
     string? InstagramUrl = null,
     string? YouTubeUrl = null);
 
-/// <summary>MediaUrls: at most Listing.MaxPhotoCount (5) URLs, each returned by POST api/v1/listings/images.
+/// <summary>MediaUrls: at most Listing.MaxPhotoCount (30) URLs; on submission only the first PromotionPlan.PhotoLimit are kept, each returned by POST api/v1/listings/images.
 /// HasOriginalReceipt only counts for Used items. The social links are optional and must point at that platform.</summary>
 public sealed record UpdateListingRequest(
     string Title,

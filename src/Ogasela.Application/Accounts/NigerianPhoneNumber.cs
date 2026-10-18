@@ -32,6 +32,12 @@ public static partial class NigerianPhoneNumber
         return "234" + phone[1..];
     }
 
+    /// <summary>
+    /// Converts a valid Nigerian number to the local format the app stores (e.g. "+2348031234567"
+    /// -&gt; "08031234567"). Assumes <see cref="IsValid"/> has already been checked.
+    /// </summary>
+    public static string ToLocalFormat(string phone) => "0" + ToInternationalFormat(phone)[3..];
+
     [GeneratedRegex(@"^(\+234|234|0)[789][01]\d{8}$")]
     private static partial Regex Regex();
 }

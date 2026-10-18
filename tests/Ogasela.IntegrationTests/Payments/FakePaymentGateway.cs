@@ -45,8 +45,14 @@ public sealed class FakePaymentGateway : IPaymentGateway
             new PaymentVerificationResult(transaction.Successful, reference, transaction.AmountKobo, transaction.State)));
     }
 
-    public Task<Result> ProcessRefundAsync(string transactionReference, CancellationToken cancellationToken) =>
-        Task.FromResult(Result.Success());
+    /// <summary>References fully refunded so far, for tests to assert on.</summary>
+    public ConcurrentBag<string> FullRefunds { get; } = new();
+
+    public Task<Result> ProcessRefundAsync(string transactionReference, CancellationToken cancellationToken)
+    {
+        FullRefunds.Add(transactionReference);
+        return Task.FromResult(Result.Success());
+    }
 
     /// <summary>Partial refunds requested so far, for tests to assert on (reference to amount in kobo).</summary>
     public ConcurrentDictionary<string, decimal> PartialRefunds { get; } = new();

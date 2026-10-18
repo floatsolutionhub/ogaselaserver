@@ -164,6 +164,7 @@ public sealed class ListingCheckoutHandlers :
             // The wallet debit, its PlanPurchase record and the status change land in one save.
             await _publishService.SubmitAsync(listing, plan, cancellationToken);
             await _dbContext.SaveChangesAsync(cancellationToken);
+            await _publishService.FlushDroppedMediaAsync(cancellationToken);
             return Result.Success(new ListingCheckoutResponse(ListingCheckoutOutcome.Submitted, ListingResponse.From(listing)));
         }
 
@@ -266,29 +267,33 @@ public sealed class ListingCheckoutHandlers :
 /// payment webhook and <see cref="ConfirmListingPaymentCommand"/>, and idempotent: only a Pending
 /// transaction is touched, inside a DB transaction guarded by the rows' concurrency tokens. Money
 /// is never lost - if the payment succeeded but the listing can no longer be submitted (already
-/// submitted by another payment, no longer eligible, underpaid), it's credited to the wallet.
+/// submitted by another payment, no longer eligible, underpaid), it's refunded to the payer's card
+/// or account. If the gateway refuses that refund, the payment stays Success and an error is logged
+/// so staff can refund it from the Control Portal.
 /// </summary>
 public sealed class ListingPaymentSettlement
 {
     private readonly IApplicationDbContext _dbContext;
     private readonly ListingPublishService _publishService;
-    private readonly IDateTime _dateTime;
+    private readonly PlanChargeRefunder _refunder;
     private readonly ILogger<ListingPaymentSettlement> _logger;
 
     public ListingPaymentSettlement(
-        IApplicationDbContext dbContext, ListingPublishService publishService, IDateTime dateTime,
+        IApplicationDbContext dbContext, ListingPublishService publishService, PlanChargeRefunder refunder,
         ILogger<ListingPaymentSettlement> logger)
     {
         _dbContext = dbContext;
         _publishService = publishService;
-        _dateTime = dateTime;
+        _refunder = refunder;
         _logger = logger;
     }
 
     public async Task SettleAsync(Transaction transaction, PaymentVerificationResult verification, CancellationToken cancellationToken)
     {
+        var saved = false;
         await _dbContext.ExecuteInTransactionAsync(async () =>
         {
+            saved = false;
             if (!transaction.IsAwaitingSettlement)
             {
                 return;
@@ -311,24 +316,41 @@ public sealed class ListingPaymentSettlement
             var submitted = await TrySubmitAsync(transaction, verification, cancellationToken);
             if (!submitted)
             {
-                // Keep the money with the seller: they can use it for this ad (or any other) from the wallet.
-                var wallet = await _dbContext.GetOrCreateWalletAsync(transaction.SellerId, _dateTime, cancellationToken);
-                wallet.Credit(verification.AmountKobo, _dateTime.UtcNow);
-                transaction.MarkRefunded();
-                _dbContext.Transactions.Add(Transaction.CreateSucceeded(
-                    transaction.SellerId, TransactionType.Refund, verification.AmountKobo, null, transaction.RelatedListingId,
-                    _dateTime.UtcNow));
+                // Give the money back to the card/account it came from (the wallet is switched off).
+                var refund = await _refunder.RefundAsync(transaction, cancellationToken);
+                if (refund.IsFailure && refund.Error == PaymentErrors.RefundAlreadyInProgress)
+                {
+                    // A concurrent webhook/confirm settled the same payment first - nothing left to do.
+                    return;
+                }
+
+                if (refund.IsFailure)
+                {
+                    _logger.LogError(
+                        "Listing payment {Reference} couldn't submit its ad and the automatic refund failed; refund it from the Control Portal",
+                        verification.Reference);
+                }
             }
 
-            await SaveAsync(transaction, cancellationToken);
+            saved = await SaveAsync(transaction, cancellationToken);
         }, cancellationToken);
+
+        // Only once the trimmed ad is committed are the photos it dropped safe to delete.
+        if (saved)
+        {
+            await _publishService.FlushDroppedMediaAsync(cancellationToken);
+        }
+        else
+        {
+            _publishService.DiscardDroppedMedia();
+        }
     }
 
     private async Task<bool> TrySubmitAsync(Transaction transaction, PaymentVerificationResult verification, CancellationToken cancellationToken)
     {
         if (verification.AmountKobo < transaction.AmountKobo)
         {
-            _logger.LogWarning("Listing payment {Reference} was underpaid; crediting the wallet instead", verification.Reference);
+            _logger.LogWarning("Listing payment {Reference} was underpaid; refunding it", verification.Reference);
             return false;
         }
 
@@ -336,7 +358,7 @@ public sealed class ListingPaymentSettlement
         if (listing is not { Status: ListingStatus.Draft } || listing.PromotionPlanId is not { } planId)
         {
             _logger.LogInformation(
-                "Listing payment {Reference} confirmed but the listing is no longer awaiting payment; crediting the wallet",
+                "Listing payment {Reference} confirmed but the listing is no longer awaiting payment; refunding it",
                 verification.Reference);
             return false;
         }
@@ -345,7 +367,7 @@ public sealed class ListingPaymentSettlement
         if (plan is null || (await _publishService.CheckEligibilityAsync(listing, plan, cancellationToken)).IsFailure)
         {
             _logger.LogWarning(
-                "Listing payment {Reference} confirmed but the listing can't be submitted any more; crediting the wallet",
+                "Listing payment {Reference} confirmed but the listing can't be submitted any more; refunding it",
                 verification.Reference);
             return false;
         }
@@ -354,16 +376,19 @@ public sealed class ListingPaymentSettlement
         return true;
     }
 
-    private async Task SaveAsync(Transaction transaction, CancellationToken cancellationToken)
+    /// <summary>False when a concurrent webhook/confirm settled the same payment first.</summary>
+    private async Task<bool> SaveAsync(Transaction transaction, CancellationToken cancellationToken)
     {
         try
         {
             await _dbContext.SaveChangesAsync(cancellationToken);
+            return true;
         }
         catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
         {
             // A concurrent webhook/confirm settled the same payment first - nothing left to do.
             _logger.LogInformation("Concurrent settlement of listing payment {TransactionId}; skipping", transaction.Id);
+            return false;
         }
     }
 }

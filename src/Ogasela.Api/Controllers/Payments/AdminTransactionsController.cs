@@ -18,7 +18,7 @@ public sealed class AdminTransactionsController : ControllerBase
         _sender = sender;
     }
 
-    /// <summary>Reverses a successful Transaction and credits the amount back to the seller's wallet. Only a Success transaction can be refunded; this does not call back out to the original payment gateway.</summary>
+    /// <summary>Reverses a successful Transaction. An ad-plan charge is refunded the way it was paid: card/transfer payments back through the payment gateway, older wallet payments back to the wallet. Only a Success transaction can be refunded.</summary>
     [HttpPost("api/v1/admin/transactions/{id:guid}/refund")]
     public async Task<IActionResult> Refund(Guid id, CancellationToken cancellationToken)
     {

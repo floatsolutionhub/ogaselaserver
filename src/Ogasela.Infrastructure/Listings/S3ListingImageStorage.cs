@@ -44,6 +44,27 @@ public sealed class S3ListingImageStorage : IListingImageStorage
             },
             cancellationToken);
 
-        return $"https://{_settings.S3BucketName}.s3.{_settings.Region}.amazonaws.com/{key}";
+        return $"{PublicBaseUrl}{key}";
     }
+
+    public async Task<bool> DeleteAsync(string url, CancellationToken cancellationToken)
+    {
+        var ownPrefix = $"{PublicBaseUrl}{KeyPrefix}/";
+        if (!url.StartsWith(ownPrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var key = url[PublicBaseUrl.Length..];
+        if (key.Contains("..", StringComparison.Ordinal) || key.Contains('?') || key.Contains('#'))
+        {
+            return false;
+        }
+
+        await _s3Client.DeleteObjectAsync(
+            new DeleteObjectRequest { BucketName = _settings.S3BucketName, Key = key }, cancellationToken);
+        return true;
+    }
+
+    private string PublicBaseUrl => $"https://{_settings.S3BucketName}.s3.{_settings.Region}.amazonaws.com/";
 }

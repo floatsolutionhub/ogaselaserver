@@ -71,8 +71,9 @@ public sealed class ApproveListingCommandHandler : IRequestHandler<ApproveListin
 
 /// <summary>
 /// Reject: back to Draft with the moderator's reason so the seller can fix and resubmit. A paid
-/// plan was charged on submission, so that charge is refunded to the seller's wallet here, in the
-/// same save as the status change.
+/// plan was charged on submission, so that charge is refunded the way it was paid (see
+/// <see cref="PlanChargeRefunder"/>) - to the seller's card/account for card payments. The refund
+/// happens first: if the gateway refuses it, the ad isn't rejected and the moderator can retry.
 /// </summary>
 public sealed class RejectListingCommandHandler : IRequestHandler<RejectListingCommand, Result>
 {
@@ -81,16 +82,18 @@ public sealed class RejectListingCommandHandler : IRequestHandler<RejectListingC
     private readonly IAuditLogger _auditLogger;
     private readonly IPublisher _publisher;
     private readonly IDateTime _dateTime;
+    private readonly PlanChargeRefunder _refunder;
 
     public RejectListingCommandHandler(
         IApplicationDbContext dbContext, ICurrentUserService currentUser, IAuditLogger auditLogger,
-        IPublisher publisher, IDateTime dateTime)
+        IPublisher publisher, IDateTime dateTime, PlanChargeRefunder refunder)
     {
         _dbContext = dbContext;
         _currentUser = currentUser;
         _auditLogger = auditLogger;
         _publisher = publisher;
         _dateTime = dateTime;
+        _refunder = refunder;
     }
 
     public async Task<Result> Handle(RejectListingCommand request, CancellationToken cancellationToken)
@@ -108,7 +111,6 @@ public sealed class RejectListingCommandHandler : IRequestHandler<RejectListingC
 
         var now = _dateTime.UtcNow;
         var reason = request.Reason.Trim();
-        listing.RejectReview(reason, now);
 
         // The most recent successful plan charge for this listing is the one this submission made.
         var charge = await _dbContext.Transactions
@@ -119,14 +121,18 @@ public sealed class RejectListingCommandHandler : IRequestHandler<RejectListingC
             .OrderByDescending(t => t.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
+        // Refund before touching the listing: a card refund saves as it claims the charge, and if
+        // the gateway refuses, the ad must still be awaiting review so the moderator can retry.
         if (charge is not null)
         {
-            var wallet = await _dbContext.GetOrCreateWalletAsync(charge.SellerId, _dateTime, cancellationToken);
-            wallet.Credit(charge.AmountKobo, now);
-            charge.MarkRefunded();
-            _dbContext.Transactions.Add(Transaction.CreateSucceeded(
-                charge.SellerId, TransactionType.Refund, charge.AmountKobo, null, listing.Id, now));
+            var refund = await _refunder.RefundAsync(charge, cancellationToken);
+            if (refund.IsFailure)
+            {
+                return refund;
+            }
         }
+
+        listing.RejectReview(reason, now);
 
         await _auditLogger.LogAsync(
             _currentUser.UserId!.Value, "Listing.Rejected", nameof(Listing), listing.Id,

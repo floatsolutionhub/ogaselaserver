@@ -48,6 +48,7 @@ public sealed class PublishListingCommandHandler : IRequestHandler<PublishListin
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await _publishService.FlushDroppedMediaAsync(cancellationToken);
 
         return Result.Success(ListingResponse.From(listing));
     }

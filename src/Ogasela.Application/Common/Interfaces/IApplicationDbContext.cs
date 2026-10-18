@@ -109,7 +109,7 @@ public interface IApplicationDbContext
 
     DbSet<ContactFormSubmission> ContactFormSubmissions { get; }
 
-    DbSet<TesterSignup> TesterSignups { get; }
+    DbSet<InterestSignup> InterestSignups { get; }
 
     DbSet<AccountDeletionRequest> AccountDeletionRequests { get; }
 

@@ -2,8 +2,12 @@ namespace Ogasela.Domain.Listings;
 
 public class Listing
 {
-    /// <summary>Hard ceiling on MediaUrls, enforced regardless of the selected PromotionPlan's PhotoLimit.</summary>
-    public const int MaxPhotoCount = 5;
+    /// <summary>
+    /// Hard ceiling on MediaUrls - the most any PromotionPlan's PhotoLimit can be set to. A draft may
+    /// hold up to this many; when it's submitted, <see cref="TrimMediaTo"/> keeps only what the
+    /// chosen plan allows.
+    /// </summary>
+    public const int MaxPhotoCount = 30;
 
     private Listing()
     {
@@ -100,6 +104,22 @@ public class Listing
 
         listing.MediaUrls.AddRange(mediaUrls);
         return listing;
+    }
+
+    /// <summary>
+    /// Keeps the first <paramref name="limit"/> photos (the first is the cover) and drops the rest.
+    /// Returns the dropped URLs, empty if nothing was over the limit.
+    /// </summary>
+    public IReadOnlyList<string> TrimMediaTo(int limit)
+    {
+        if (limit <= 0 || MediaUrls.Count <= limit)
+        {
+            return [];
+        }
+
+        var dropped = MediaUrls.Skip(limit).ToList();
+        MediaUrls = MediaUrls.Take(limit).ToList();
+        return dropped;
     }
 
     public void UpdateDetails(

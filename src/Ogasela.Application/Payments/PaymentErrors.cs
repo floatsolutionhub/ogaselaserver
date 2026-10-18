@@ -42,4 +42,10 @@ public static class PaymentErrors
 
     public static readonly Error RefundExceedsWalletBalance = new(
         "Payment.RefundExceedsWalletBalance", "The seller's wallet balance is lower than the amount being refunded (it has already been spent).");
+
+    public static readonly Error RefundFailed = new(
+        "Payment.RefundFailed", "The payment provider couldn't process the refund right now. Nothing was changed - please try again.");
+
+    public static readonly Error RefundAlreadyInProgress = new(
+        "Payment.RefundAlreadyInProgress", "This payment is already being refunded.");
 }

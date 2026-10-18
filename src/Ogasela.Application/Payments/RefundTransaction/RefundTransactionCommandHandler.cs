@@ -8,8 +8,8 @@ using Ogasela.Shared;
 namespace Ogasela.Application.Payments.RefundTransaction;
 
 /// <summary>
-/// A PlanPurchase (an internal wallet debit that never touched a gateway) is refunded by
-/// crediting the wallet back directly. An AdSpendTopUp (money that came from the gateway) is
+/// A PlanPurchase is refunded the way it was paid, by <see cref="PlanChargeRefunder"/>: card
+/// payments back through the gateway, wallet payments back to the wallet. An AdSpendTopUp (money that came from the gateway) is
 /// refunded through the gateway first, then the wallet credit it originally produced is
 /// reversed. Either way, both the wallet balance and the transaction's Refunded status change
 /// atomically together.
@@ -19,13 +19,16 @@ public sealed class RefundTransactionCommandHandler : IRequestHandler<RefundTran
     private readonly IApplicationDbContext _dbContext;
     private readonly IDateTime _dateTime;
     private readonly IPaymentGatewayResolver _gatewayResolver;
+    private readonly PlanChargeRefunder _planRefunder;
 
     public RefundTransactionCommandHandler(
-        IApplicationDbContext dbContext, IDateTime dateTime, IPaymentGatewayResolver gatewayResolver)
+        IApplicationDbContext dbContext, IDateTime dateTime, IPaymentGatewayResolver gatewayResolver,
+        PlanChargeRefunder planRefunder)
     {
         _dbContext = dbContext;
         _dateTime = dateTime;
         _gatewayResolver = gatewayResolver;
+        _planRefunder = planRefunder;
     }
 
     public async Task<Result<TransactionResponse>> Handle(RefundTransactionCommand request, CancellationToken cancellationToken)
@@ -41,6 +44,20 @@ public sealed class RefundTransactionCommandHandler : IRequestHandler<RefundTran
         if (transaction.Status != TransactionStatus.Success || transaction.Type == TransactionType.Refund)
         {
             return Result.Failure<TransactionResponse>(PaymentErrors.TransactionNotRefundable);
+        }
+
+        if (transaction.Type == TransactionType.PlanPurchase)
+        {
+            var planRefund = await _planRefunder.RefundAsync(transaction, cancellationToken);
+            if (planRefund.IsFailure)
+            {
+                return Result.Failure<TransactionResponse>(planRefund.Error);
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return Result.Success(new TransactionResponse(
+                transaction.Id, transaction.Type, transaction.AmountKobo, transaction.GatewayReference,
+                transaction.Status, transaction.RelatedListingId, transaction.CreatedAt));
         }
 
         if (transaction.Type == TransactionType.AdSpendTopUp)

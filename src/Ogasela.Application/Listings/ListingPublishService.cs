@@ -29,6 +29,7 @@ public sealed class ListingPublishService
     private readonly IDateTime _dateTime;
     private readonly AiSettings _aiSettings;
     private readonly Settings.IPlatformSettings _platformSettings;
+    private readonly ListingMediaCleanup _mediaCleanup;
 
     public ListingPublishService(
         IApplicationDbContext dbContext,
@@ -37,8 +38,10 @@ public sealed class ListingPublishService
         IFraudRiskScorer fraudRiskScorer,
         IDateTime dateTime,
         IOptions<ListingSettings> settings,
-        IOptions<AiSettings> aiSettings)
+        IOptions<AiSettings> aiSettings,
+        ListingMediaCleanup mediaCleanup)
     {
+        _mediaCleanup = mediaCleanup;
         _dbContext = dbContext;
         _verificationGuard = verificationGuard;
         _paymentAuthorizer = paymentAuthorizer;
@@ -109,10 +112,8 @@ public sealed class ListingPublishService
             return Result.Failure(ListingErrors.Incomplete);
         }
 
-        if (plan.PhotoLimit > 0 && listing.MediaUrls.Count > plan.PhotoLimit)
-        {
-            return Result.Failure(ListingErrors.MediaLimitExceeded);
-        }
+        // More photos than the plan allows isn't a failure: SubmitAsync keeps the first
+        // PhotoLimit of them, so a seller can pick a smaller plan without re-editing the ad.
 
         if (plan.IsFree)
         {
@@ -149,12 +150,16 @@ public sealed class ListingPublishService
 
     /// <summary>
     /// Moves a listing whose plan is settled (free, or already paid) on: to moderator review when
-    /// approval is required (the default), otherwise straight live. Runs the fraud-risk check.
-    /// The caller saves.
+    /// approval is required (the default), otherwise straight live. Drops any photos beyond the
+    /// plan's PhotoLimit (keeping the first ones, so the cover stays) - done here rather than at
+    /// checkout so an abandoned card payment never costs the seller photos. Runs the fraud-risk
+    /// check. The caller saves, then calls <see cref="FlushDroppedMediaAsync"/> to delete the dropped
+    /// photo files.
     /// </summary>
     public async Task SubmitAsync(Listing listing, PromotionPlan plan, CancellationToken cancellationToken)
     {
         var now = _dateTime.UtcNow;
+        _mediaCleanup.Queue(listing.TrimMediaTo(plan.PhotoLimit));
         if (await _platformSettings.RequireListingApprovalAsync(cancellationToken))
         {
             // Goes live (and the plan's duration starts) only when a moderator approves it -
@@ -177,4 +182,10 @@ public sealed class ListingPublishService
                 reporterId: null, ReportTargetType.Listing, listing.Id, assessment.ReasonSummary, now, assessment.RiskScore));
         }
     }
+
+    /// <summary>Call after the save that persisted a <see cref="SubmitAsync"/>: deletes photo files it dropped.</summary>
+    public Task FlushDroppedMediaAsync(CancellationToken cancellationToken) => _mediaCleanup.FlushAsync(cancellationToken);
+
+    /// <summary>Call instead when that save didn't happen, so nothing still in use is deleted.</summary>
+    public void DiscardDroppedMedia() => _mediaCleanup.Discard();
 }

@@ -44,7 +44,9 @@ public static class RbacSeeder
         ("officepickup.view", "OfficePickup", "View office pickup requests"),
         ("officepickup.manage", "OfficePickup", "Update office pickup progress (item received, inspection, ready, delivered)"),
         ("officepickup.refund", "OfficePickup", "Refund office pickup requests"),
-        ("officepickup.setup", "OfficePickup", "Manage office pickup branches and eligible categories")
+        ("officepickup.setup", "OfficePickup", "Manage office pickup branches and eligible categories"),
+        ("marketing.interest.view", "Marketing", "View waiting-list and tester signups"),
+        ("marketing.interest.manage", "Marketing", "Update, export and delete waiting-list and tester signups")
     ];
 
     public static async Task SeedAsync(IApplicationDbContext dbContext, CancellationToken cancellationToken)
@@ -67,7 +69,7 @@ public static class RbacSeeder
             "staff.view", "staff.create", "staff.kyc.review", "staff.kyc.approve", "staff.kyc.reject",
             "geo.state.manage", "geo.city.manage",
             "finance.dashboard.view", "audit.log.view", "moderation.queue.view", "verification.queue.view",
-            "users.view", "listings.view", "disputes.view", "officepickup.view"
+            "users.view", "listings.view", "disputes.view", "officepickup.view", "marketing.interest.view"
         };
         var hrKeys = new[]
         {

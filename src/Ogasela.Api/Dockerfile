@@ -9,7 +9,6 @@ COPY src/Ogasela.Infrastructure/Ogasela.Infrastructure.csproj src/Ogasela.Infras
 COPY src/Ogasela.Shared/Ogasela.Shared.csproj src/Ogasela.Shared/
 COPY src/Ogasela.Api/Ogasela.Api.csproj src/Ogasela.Api/
 RUN dotnet restore src/Ogasela.Api/Ogasela.Api.csproj
-
 COPY src/ src/
 RUN dotnet publish src/Ogasela.Api/Ogasela.Api.csproj -c Release -o /app --no-restore
 
