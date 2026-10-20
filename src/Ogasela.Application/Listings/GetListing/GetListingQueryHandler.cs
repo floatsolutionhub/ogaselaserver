@@ -25,7 +25,7 @@ public sealed class GetListingQueryHandler : IRequestHandler<GetListingQuery, Re
     public async Task<Result<ListingDetailResponse>> Handle(GetListingQuery request, CancellationToken cancellationToken)
     {
         var listing = await _dbContext.Listings.FirstOrDefaultAsync(l => l.Id == request.ListingId, cancellationToken);
-        if (listing is null)
+        if (listing is null || listing.Status == ListingStatus.Deleted)
         {
             return Result.Failure<ListingDetailResponse>(ListingErrors.ListingNotFound);
         }
@@ -71,7 +71,9 @@ public sealed class GetListingQueryHandler : IRequestHandler<GetListingQuery, Re
             seller.sellerProfile.StoreAddress,
             seller.sellerProfile.VerificationStatus,
             seller.sellerProfile.CreatedAt,
-            seller.sellerProfile.IsBusinessVerified);
+            seller.sellerProfile.IsBusinessVerified,
+            await _dbContext.BlockedUsers.AnyAsync(
+                b => b.BlockerId == _currentUser.UserId && b.BlockedId == seller.user.Id, cancellationToken));
 
         // A seller opening their own ad isn't a view.
         if (_currentUser.UserId != seller.user.Id)

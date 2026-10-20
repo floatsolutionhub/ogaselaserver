@@ -16,7 +16,9 @@ public sealed record GetOfficeBranchesQuery(decimal? Latitude, decimal? Longitud
 public sealed record GetOfficePickupQuoteQuery(Guid ListingId) : IRequest<Result<OfficePickupQuote>>;
 
 /// <summary>Creates the request and starts the gateway checkout: open RedirectUrl, then confirm.</summary>
-public sealed record StartOfficePickupCommand(Guid ListingId, Guid BranchId) : IRequest<Result<OfficePickupCheckoutResponse>>;
+/// <summary>ReturnUrl: optional page the gateway sends the buyer back to (see IPaymentReturnUrlPolicy).</summary>
+public sealed record StartOfficePickupCommand(Guid ListingId, Guid BranchId, string? ReturnUrl = null)
+    : IRequest<Result<OfficePickupCheckoutResponse>>;
 
 /// <summary>Called when the buyer returns from the payment page. Asks the gateway directly, then settles like the webhook would. Safe to repeat.</summary>
 public sealed record ConfirmOfficePickupPaymentCommand(Guid RequestId) : IRequest<Result<OfficePickupDetail>>;
@@ -124,11 +126,13 @@ public sealed class UserOfficePickupHandlers :
     private readonly IPaymentGatewayResolver _gatewayResolver;
     private readonly OfficePickupPaymentSettlement _settlement;
     private readonly IDateTime _dateTime;
+    private readonly IPaymentReturnUrlPolicy _returnUrlPolicy;
 
     public UserOfficePickupHandlers(
         IApplicationDbContext dbContext, ICurrentUserService currentUser, IPaymentGatewayResolver gatewayResolver,
-        OfficePickupPaymentSettlement settlement, IDateTime dateTime)
+        OfficePickupPaymentSettlement settlement, IDateTime dateTime, IPaymentReturnUrlPolicy returnUrlPolicy)
     {
+        _returnUrlPolicy = returnUrlPolicy;
         _dbContext = dbContext;
         _currentUser = currentUser;
         _gatewayResolver = gatewayResolver;
@@ -171,6 +175,11 @@ public sealed class UserOfficePickupHandlers :
 
     public async Task<Result<OfficePickupCheckoutResponse>> Handle(StartOfficePickupCommand request, CancellationToken cancellationToken)
     {
+        if (request.ReturnUrl is not null && !_returnUrlPolicy.IsAllowed(request.ReturnUrl))
+        {
+            return Result.Failure<OfficePickupCheckoutResponse>(PaymentErrors.ReturnUrlNotAllowed);
+        }
+
         var listing = await _dbContext.Listings.AsNoTracking().FirstOrDefaultAsync(l => l.Id == request.ListingId, cancellationToken);
         if (listing is null)
         {
@@ -228,7 +237,7 @@ public sealed class UserOfficePickupHandlers :
         var init = await _gatewayResolver.GetActive().InitializeCustomerTransactionAsync(
             // The gateway needs a well-formed email even for phone-only accounts.
             string.IsNullOrWhiteSpace(email) ? $"buyer+{Me:N}@ogasela.com" : email,
-            pickup.TotalKobo, $"Ogasela office pickup {reference} for \"{listing.Title}\"", cancellationToken);
+            pickup.TotalKobo, $"Ogasela office pickup {reference} for \"{listing.Title}\"", request.ReturnUrl, cancellationToken);
         if (init.IsFailure)
         {
             return Result.Failure<OfficePickupCheckoutResponse>(PaymentErrors.GatewayError);

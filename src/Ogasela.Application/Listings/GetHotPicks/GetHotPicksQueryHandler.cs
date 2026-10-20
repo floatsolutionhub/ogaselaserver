@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Ogasela.Application.Analytics;
 using Ogasela.Application.Common.Interfaces;
+using Ogasela.Application.Messaging;
 using Ogasela.Application.Search;
 using Ogasela.Domain.Listings;
 using Ogasela.Shared;
@@ -28,12 +29,15 @@ public sealed class GetHotPicksQueryHandler : IRequestHandler<GetHotPicksQuery, 
     private readonly IApplicationDbContext _dbContext;
     private readonly IDateTime _dateTime;
     private readonly IEngagementTracker _engagementTracker;
+    private readonly ICurrentUserService _currentUser;
 
-    public GetHotPicksQueryHandler(IApplicationDbContext dbContext, IDateTime dateTime, IEngagementTracker engagementTracker)
+    public GetHotPicksQueryHandler(
+        IApplicationDbContext dbContext, IDateTime dateTime, IEngagementTracker engagementTracker, ICurrentUserService currentUser)
     {
         _dbContext = dbContext;
         _dateTime = dateTime;
         _engagementTracker = engagementTracker;
+        _currentUser = currentUser;
     }
 
     public async Task<Result<SearchResultPage>> Handle(GetHotPicksQuery request, CancellationToken cancellationToken)
@@ -41,6 +45,12 @@ public sealed class GetHotPicksQueryHandler : IRequestHandler<GetHotPicksQuery, 
         var now = _dateTime.UtcNow;
         var listings = _dbContext.Listings
             .Where(l => l.Status == ListingStatus.Active || l.Status == ListingStatus.ExpiringSoon);
+
+        if (_currentUser.UserId is { } viewerId)
+        {
+            var blockedSellerIds = _dbContext.ProfileIdsBlockedBy(viewerId);
+            listings = listings.Where(l => !blockedSellerIds.Contains(l.SellerId));
+        }
 
         if (request.CategoryId is { } categoryId)
         {

@@ -183,6 +183,22 @@ public sealed class ListingPublishService
         }
     }
 
+    /// <summary>
+    /// A paid upgrade of an ad whose plan period is running: the new plan starts now (its full
+    /// duration from today - the old expiry date no longer counts) and the ad keeps its status, so
+    /// a live ad stays live. Photos beyond the new plan's limit are dropped like on submit; the
+    /// caller saves, then calls <see cref="FlushDroppedMediaAsync"/>.
+    /// </summary>
+    public void ApplyPlanUpgrade(Listing listing, PromotionPlan plan)
+    {
+        _mediaCleanup.Queue(listing.TrimMediaTo(plan.PhotoLimit));
+        listing.ChangePlanNow(plan.Id, plan.DurationDays, _dateTime.UtcNow);
+    }
+
+    /// <summary>Whether ads (and edits of live ads) go to a moderator before buyers see them - a platform setting.</summary>
+    public Task<bool> RequiresApprovalAsync(CancellationToken cancellationToken) =>
+        _platformSettings.RequireListingApprovalAsync(cancellationToken);
+
     /// <summary>Call after the save that persisted a <see cref="SubmitAsync"/>: deletes photo files it dropped.</summary>
     public Task FlushDroppedMediaAsync(CancellationToken cancellationToken) => _mediaCleanup.FlushAsync(cancellationToken);
 

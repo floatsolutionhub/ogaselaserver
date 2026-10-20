@@ -19,6 +19,8 @@ namespace Ogasela.Application.Admin.EraseUserData;
 /// AdAccountConnection row and its tokens are erased either way), and the User/SellerProfile PII
 /// fields themselves (anonymized, not deleted outright, so Transactions/AuditLogs/Reviews keep a
 /// valid foreign key for financial and audit history as required).
+/// Conversations and messages are deliberately left untouched: everyone the user did business
+/// with keeps the chat for reference (see AdminUsersTests' *_KeepsTheirChats_* tests).
 /// </summary>
 public sealed class EraseUserDataCommandHandler : IRequestHandler<EraseUserDataCommand, Result<EraseUserDataReceipt>>
 {
@@ -109,12 +111,16 @@ public sealed class EraseUserDataCommandHandler : IRequestHandler<EraseUserDataC
         var documents = await _dbContext.UserDocuments.Where(d => d.UserId == user.Id).ToListAsync(cancellationToken);
         _dbContext.UserDocuments.RemoveRange(documents);
 
+        // Without this a Google/Apple/Facebook user could sign straight back into the anonymized account.
+        var externalLogins = await _dbContext.ExternalLogins.Where(l => l.UserId == user.Id).ToListAsync(cancellationToken);
+        _dbContext.ExternalLogins.RemoveRange(externalLogins);
+
         var changeRequests = await _dbContext.ProfileChangeRequests.Where(r => r.UserId == user.Id).ToListAsync(cancellationToken);
         _dbContext.ProfileChangeRequests.RemoveRange(changeRequests);
 
         // Hashing a random value (never a real password) so the account is permanently unable to
         // authenticate - Verify() can never match it, by construction.
-        user.Anonymize(_passwordHasher.Hash(Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N")));
+        user.Anonymize(_passwordHasher.Hash(Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N")), now);
 
         var receipt = new EraseUserDataReceipt(
             user.Id, verificationsErased, connectionsRevoked, refreshTokens.Count, sellerProfile is not null, now);

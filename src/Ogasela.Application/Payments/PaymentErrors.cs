@@ -48,4 +48,7 @@ public static class PaymentErrors
 
     public static readonly Error RefundAlreadyInProgress = new(
         "Payment.RefundAlreadyInProgress", "This payment is already being refunded.");
+
+    public static readonly Error ReturnUrlNotAllowed = new(
+        "Payment.ReturnUrlNotAllowed", "This payment can't return to that page.");
 }

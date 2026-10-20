@@ -5,6 +5,7 @@ using Ogasela.Api.Common;
 using Ogasela.Api.Contracts.Listings;
 using Ogasela.Application.Listings.Checkout;
 using Ogasela.Application.Listings.CreateDraftListing;
+using Ogasela.Application.Listings.DeleteListing;
 using Ogasela.Application.Listings.GetHotPicks;
 using Ogasela.Application.Listings.GetListing;
 using Ogasela.Application.Listings.GetSellerListings;
@@ -12,6 +13,7 @@ using Ogasela.Application.Listings.MarkSoldListing;
 using Ogasela.Application.Listings.PauseListing;
 using Ogasela.Application.Listings.PublishListing;
 using Ogasela.Application.Listings.RepostListing;
+using Ogasela.Application.Listings.ResubmitListing;
 using Ogasela.Application.Listings.UpdateListing;
 using Ogasela.Application.Listings.UploadListingImage;
 
@@ -67,7 +69,7 @@ public sealed class ListingsController : ControllerBase
     [HttpPost("api/v1/listings/{id:guid}/checkout")]
     [Authorize]
     public async Task<IActionResult> Checkout(Guid id, ListingCheckoutRequest request, CancellationToken cancellationToken) =>
-        (await _sender.Send(new StartListingCheckoutCommand(id, request.PromotionPlanId, request.PaymentMethod), cancellationToken))
+        (await _sender.Send(new StartListingCheckoutCommand(id, request.PromotionPlanId, request.PaymentMethod, request.ReturnUrl), cancellationToken))
             .ToActionResult(this);
 
     /// <summary>Call on returning from the gateway: verifies the card payment and, once paid, submits the listing. Safe to repeat.</summary>
@@ -82,7 +84,34 @@ public sealed class ListingsController : ControllerBase
     public async Task<IActionResult> CancelCheckoutPayment(Guid id, string reference, CancellationToken cancellationToken) =>
         (await _sender.Send(new CancelListingPaymentCommand(id, reference), cancellationToken)).ToActionResult(this);
 
-    /// <summary>Replaces a listing's editable fields. Only allowed while the listing is a Draft or Active.</summary>
+    /// <summary>
+    /// Moves a live ad (or one whose edit is in review or was sent back) onto a higher plan. The
+    /// full price of the new plan is charged; once paid, its duration starts counting immediately
+    /// and the old expiry date is dropped. Downgrades are refused. Card payments settle through the
+    /// same confirm/cancel endpoints as checkout.
+    /// </summary>
+    [HttpPost("api/v1/listings/{id:guid}/upgrade")]
+    [Authorize]
+    public async Task<IActionResult> UpgradePlan(Guid id, PlanUpgradeRequest request, CancellationToken cancellationToken) =>
+        (await _sender.Send(new StartPlanUpgradeCommand(id, request.PromotionPlanId, request.PaymentMethod, request.ReturnUrl), cancellationToken))
+            .ToActionResult(this);
+
+    /// <summary>Sends a fixed, rejected edit of a live ad back for review - free, its plan period keeps running.</summary>
+    [HttpPost("api/v1/listings/{id:guid}/resubmit")]
+    [Authorize]
+    public async Task<IActionResult> Resubmit(Guid id, CancellationToken cancellationToken) =>
+        (await _sender.Send(new ResubmitListingCommand(id), cancellationToken)).ToActionResult(this);
+
+    /// <summary>Deletes a Draft (including rejected), PendingReview or Expired ad. A paid plan isn't refunded.</summary>
+    [HttpDelete("api/v1/listings/{id:guid}")]
+    [Authorize]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken) =>
+        (await _sender.Send(new DeleteListingCommand(id), cancellationToken)).ToActionResult(this);
+
+    /// <summary>
+    /// Replaces a listing's editable fields - a Draft, or a live/expired ad. Editing an approved ad
+    /// sends it back to review (when approval is on); its plan can't be changed here (see upgrade).
+    /// </summary>
     [HttpPut("api/v1/listings/{id:guid}")]
     [Authorize]
     public async Task<IActionResult> Update(Guid id, UpdateListingRequest request, CancellationToken cancellationToken)

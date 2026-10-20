@@ -43,8 +43,11 @@ public enum ListingCheckoutOutcome
 /// so money is only taken for a listing that can actually be submitted. Free and Wallet settle in
 /// this call; Card returns a gateway checkout and the listing stays a Draft until
 /// <see cref="ConfirmListingPaymentCommand"/> or the payment webhook confirms it.
+/// <paramref name="ReturnUrl"/> (optional) is where the gateway sends a card payer back to - the web
+/// client passes its own return page; it must be on <see cref="IPaymentReturnUrlPolicy"/>'s list.
 /// </summary>
-public sealed record StartListingCheckoutCommand(Guid ListingId, Guid PromotionPlanId, ListingPaymentMethod PaymentMethod)
+public sealed record StartListingCheckoutCommand(
+    Guid ListingId, Guid PromotionPlanId, ListingPaymentMethod PaymentMethod, string? ReturnUrl = null)
     : IRequest<Result<ListingCheckoutResponse>>;
 
 /// <summary>
@@ -61,6 +64,16 @@ public sealed record ConfirmListingPaymentCommand(Guid ListingId, string Referen
 /// </summary>
 public sealed record CancelListingPaymentCommand(Guid ListingId, string Reference) : IRequest<Result<ListingCheckoutResponse>>;
 
+/// <summary>
+/// Move an ad whose plan period is running (live, or in review/back in draft after an edit) onto a
+/// higher plan. The seller pays the new plan's full price; once paid, the new plan's duration
+/// starts counting from that moment and the old expiry date is dropped. A plan can never be
+/// downgraded, here or while editing.
+/// </summary>
+public sealed record StartPlanUpgradeCommand(
+    Guid ListingId, Guid PromotionPlanId, ListingPaymentMethod PaymentMethod = ListingPaymentMethod.Card, string? ReturnUrl = null)
+    : IRequest<Result<ListingCheckoutResponse>>;
+
 public sealed record ListingCheckoutResponse(
     ListingCheckoutOutcome Outcome,
     ListingResponse Listing,
@@ -70,6 +83,16 @@ public sealed record ListingCheckoutResponse(
 public sealed class StartListingCheckoutCommandValidator : AbstractValidator<StartListingCheckoutCommand>
 {
     public StartListingCheckoutCommandValidator()
+    {
+        RuleFor(x => x.ListingId).NotEmpty();
+        RuleFor(x => x.PromotionPlanId).NotEmpty();
+        RuleFor(x => x.PaymentMethod).IsInEnum();
+    }
+}
+
+public sealed class StartPlanUpgradeCommandValidator : AbstractValidator<StartPlanUpgradeCommand>
+{
+    public StartPlanUpgradeCommandValidator()
     {
         RuleFor(x => x.ListingId).NotEmpty();
         RuleFor(x => x.PromotionPlanId).NotEmpty();
@@ -88,6 +111,7 @@ public sealed class ConfirmListingPaymentCommandValidator : AbstractValidator<Co
 
 public sealed class ListingCheckoutHandlers :
     IRequestHandler<StartListingCheckoutCommand, Result<ListingCheckoutResponse>>,
+    IRequestHandler<StartPlanUpgradeCommand, Result<ListingCheckoutResponse>>,
     IRequestHandler<ConfirmListingPaymentCommand, Result<ListingCheckoutResponse>>,
     IRequestHandler<CancelListingPaymentCommand, Result<ListingCheckoutResponse>>
 {
@@ -98,6 +122,7 @@ public sealed class ListingCheckoutHandlers :
     private readonly IPaymentGatewayResolver _gatewayResolver;
     private readonly ListingPaymentSettlement _settlement;
     private readonly IDateTime _dateTime;
+    private readonly IPaymentReturnUrlPolicy _returnUrlPolicy;
 
     public ListingCheckoutHandlers(
         IApplicationDbContext dbContext,
@@ -106,8 +131,10 @@ public sealed class ListingCheckoutHandlers :
         IPaymentAuthorizer paymentAuthorizer,
         IPaymentGatewayResolver gatewayResolver,
         ListingPaymentSettlement settlement,
-        IDateTime dateTime)
+        IDateTime dateTime,
+        IPaymentReturnUrlPolicy returnUrlPolicy)
     {
+        _returnUrlPolicy = returnUrlPolicy;
         _dbContext = dbContext;
         _currentUser = currentUser;
         _publishService = publishService;
@@ -119,6 +146,11 @@ public sealed class ListingCheckoutHandlers :
 
     public async Task<Result<ListingCheckoutResponse>> Handle(StartListingCheckoutCommand request, CancellationToken cancellationToken)
     {
+        if (request.ReturnUrl is not null && !_returnUrlPolicy.IsAllowed(request.ReturnUrl))
+        {
+            return Result.Failure<ListingCheckoutResponse>(PaymentErrors.ReturnUrlNotAllowed);
+        }
+
         var owned = await LoadOwnedListingAsync(request.ListingId, cancellationToken);
         if (owned.IsFailure)
         {
@@ -126,9 +158,17 @@ public sealed class ListingCheckoutHandlers :
         }
 
         var listing = owned.Value;
-        if (listing.Status != ListingStatus.Draft)
+        // A new ad (Draft) or a renewal of an expired one (Expired) - each buys a fresh plan period.
+        if (listing.Status is not (ListingStatus.Draft or ListingStatus.Expired))
         {
             return Result.Failure<ListingCheckoutResponse>(ListingErrors.InvalidStatusForPublish);
+        }
+
+        // A rejected edit of a live ad is back in Draft with its plan still running: it's fixed and
+        // resubmitted for free, never paid for again.
+        if (listing.Status == ListingStatus.Draft && listing.HasRunningPlanPeriod(_dateTime.UtcNow))
+        {
+            return Result.Failure<ListingCheckoutResponse>(ListingErrors.ResubmitInstead);
         }
 
         var plan = await _dbContext.PromotionPlans.FirstOrDefaultAsync(p => p.Id == request.PromotionPlanId, cancellationToken);
@@ -170,14 +210,88 @@ public sealed class ListingCheckoutHandlers :
 
         var gateway = _gatewayResolver.GetActive();
         var init = await gateway.InitializeTransactionAsync(
-            listing.SellerId, plan.Price, $"Ogasela {plan.Name} plan for \"{listing.Title}\"", cancellationToken);
+            listing.SellerId, plan.Price, $"Ogasela {plan.Name} plan for \"{listing.Title}\"", request.ReturnUrl, cancellationToken);
         if (init.IsFailure)
         {
             return Result.Failure<ListingCheckoutResponse>(PaymentErrors.GatewayError);
         }
 
         _dbContext.Transactions.Add(Transaction.CreatePending(
-            listing.SellerId, TransactionType.PlanPurchase, plan.Price, init.Value.Reference, _dateTime.UtcNow, listing.Id));
+            listing.SellerId, TransactionType.PlanPurchase, plan.Price, init.Value.Reference, _dateTime.UtcNow, listing.Id, plan.Id));
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return Result.Success(new ListingCheckoutResponse(
+            ListingCheckoutOutcome.PaymentRequired, ListingResponse.From(listing), init.Value.Reference, init.Value.RedirectUrl));
+    }
+
+    public async Task<Result<ListingCheckoutResponse>> Handle(StartPlanUpgradeCommand request, CancellationToken cancellationToken)
+    {
+        if (request.ReturnUrl is not null && !_returnUrlPolicy.IsAllowed(request.ReturnUrl))
+        {
+            return Result.Failure<ListingCheckoutResponse>(PaymentErrors.ReturnUrlNotAllowed);
+        }
+
+        var owned = await LoadOwnedListingAsync(request.ListingId, cancellationToken);
+        if (owned.IsFailure)
+        {
+            return Result.Failure<ListingCheckoutResponse>(owned.Error);
+        }
+
+        var listing = owned.Value;
+        var now = _dateTime.UtcNow;
+        if (!ListingPaymentSettlement.IsUpgradable(listing, now) || listing.PromotionPlanId is not { } currentPlanId)
+        {
+            return Result.Failure<ListingCheckoutResponse>(ListingErrors.NotLive);
+        }
+
+        var plan = await _dbContext.PromotionPlans.FirstOrDefaultAsync(p => p.Id == request.PromotionPlanId, cancellationToken);
+        if (plan is null)
+        {
+            return Result.Failure<ListingCheckoutResponse>(ListingErrors.PromotionPlanNotFound);
+        }
+
+        if (!plan.IsActive)
+        {
+            return Result.Failure<ListingCheckoutResponse>(ListingErrors.PlanNotOnSale);
+        }
+
+        if (plan.Id == currentPlanId)
+        {
+            return Result.Failure<ListingCheckoutResponse>(ListingErrors.SamePlan);
+        }
+
+        var current = await _dbContext.PromotionPlans.AsNoTracking().FirstOrDefaultAsync(p => p.Id == currentPlanId, cancellationToken);
+        if (plan.IsFree || (current is not null && plan.Price < current.Price))
+        {
+            return Result.Failure<ListingCheckoutResponse>(ListingErrors.PlanDowngradeNotAllowed);
+        }
+
+        if (request.PaymentMethod == ListingPaymentMethod.Wallet)
+        {
+            var payment = await _paymentAuthorizer.AuthorizeAsync(listing.SellerId, plan.Id, listing.Id, cancellationToken);
+            if (payment.IsFailure)
+            {
+                return Result.Failure<ListingCheckoutResponse>(payment.Error);
+            }
+
+            // The wallet debit and the plan change land in one save.
+            _publishService.ApplyPlanUpgrade(listing, plan);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await _publishService.FlushDroppedMediaAsync(cancellationToken);
+            return Result.Success(new ListingCheckoutResponse(ListingCheckoutOutcome.Submitted, ListingResponse.From(listing)));
+        }
+
+        var gateway = _gatewayResolver.GetActive();
+        var init = await gateway.InitializeTransactionAsync(
+            listing.SellerId, plan.Price, $"Ogasela upgrade to the {plan.Name} plan for \"{listing.Title}\"", request.ReturnUrl, cancellationToken);
+        if (init.IsFailure)
+        {
+            return Result.Failure<ListingCheckoutResponse>(PaymentErrors.GatewayError);
+        }
+
+        // The target plan rides on the payment: the ad's own plan only changes once it's paid.
+        _dbContext.Transactions.Add(Transaction.CreatePending(
+            listing.SellerId, TransactionType.PlanPurchase, plan.Price, init.Value.Reference, now, listing.Id, plan.Id));
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return Result.Success(new ListingCheckoutResponse(
@@ -238,7 +352,9 @@ public sealed class ListingCheckoutHandlers :
         var listing = await _dbContext.Listings.AsNoTracking().FirstAsync(l => l.Id == listingId, cancellationToken);
         var outcome = transaction.Status switch
         {
-            TransactionStatus.Success when listing.Status != ListingStatus.Draft => ListingCheckoutOutcome.Submitted,
+            // Submitted (or, for an upgrade, moved onto the paid plan). A refunded payment leaves the
+            // ad where it was - Draft/Expired, or on its old plan.
+            TransactionStatus.Success when PaidFor(transaction, listing) => ListingCheckoutOutcome.Submitted,
             TransactionStatus.Pending => ListingCheckoutOutcome.PaymentPending,
             TransactionStatus.Cancelled => ListingCheckoutOutcome.PaymentCancelled,
             // Paid but couldn't be submitted (credited to the wallet instead), or failed/abandoned.
@@ -246,6 +362,20 @@ public sealed class ListingCheckoutHandlers :
         };
 
         return Result.Success(new ListingCheckoutResponse(outcome, ListingResponse.From(listing), reference));
+    }
+
+    private bool PaidFor(Transaction transaction, Listing listing)
+    {
+        // The ad must be on the plan this payment bought (older payments don't record it).
+        if (transaction.PromotionPlanId is { } planId && listing.PromotionPlanId != planId)
+        {
+            return false;
+        }
+
+        // Submitted or live - or, for an upgrade of an ad whose edit was sent back, a Draft whose
+        // plan period is running (a fresh Draft never has one).
+        return listing.Status is ListingStatus.PendingReview or ListingStatus.Active or ListingStatus.ExpiringSoon
+               || (listing.Status == ListingStatus.Draft && listing.HasRunningPlanPeriod(_dateTime.UtcNow));
     }
 
     private async Task<Result<Listing>> LoadOwnedListingAsync(Guid listingId, CancellationToken cancellationToken)
@@ -277,11 +407,13 @@ public sealed class ListingPaymentSettlement
     private readonly ListingPublishService _publishService;
     private readonly PlanChargeRefunder _refunder;
     private readonly ILogger<ListingPaymentSettlement> _logger;
+    private readonly IDateTime _dateTime;
 
     public ListingPaymentSettlement(
         IApplicationDbContext dbContext, ListingPublishService publishService, PlanChargeRefunder refunder,
-        ILogger<ListingPaymentSettlement> logger)
+        ILogger<ListingPaymentSettlement> logger, IDateTime dateTime)
     {
+        _dateTime = dateTime;
         _dbContext = dbContext;
         _publishService = publishService;
         _refunder = refunder;
@@ -355,7 +487,22 @@ public sealed class ListingPaymentSettlement
         }
 
         var listing = await _dbContext.Listings.FirstOrDefaultAsync(l => l.Id == transaction.RelatedListingId, cancellationToken);
-        if (listing is not { Status: ListingStatus.Draft } || listing.PromotionPlanId is not { } planId)
+        var now = _dateTime.UtcNow;
+
+        // An upgrade: the payment names a plan other than the one the ad's running period is on.
+        if (listing is not null
+            && transaction.PromotionPlanId is { } targetPlanId
+            && targetPlanId != listing.PromotionPlanId
+            && IsUpgradable(listing, now))
+        {
+            return await TryUpgradeAsync(listing, targetPlanId, verification, cancellationToken);
+        }
+
+        // A new ad (Draft without a running period) or a renewal (Expired).
+        var awaitingPayment = listing is not null
+                              && (listing.Status == ListingStatus.Expired
+                                  || (listing.Status == ListingStatus.Draft && !listing.HasRunningPlanPeriod(now)));
+        if (!awaitingPayment || (transaction.PromotionPlanId ?? listing!.PromotionPlanId) is not { } planId)
         {
             _logger.LogInformation(
                 "Listing payment {Reference} confirmed but the listing is no longer awaiting payment; refunding it",
@@ -372,7 +519,40 @@ public sealed class ListingPaymentSettlement
             return false;
         }
 
+        // Submit on the plan this payment bought, even if the seller picked another one since.
+        if (listing!.PromotionPlanId != plan.Id)
+        {
+            listing.ChoosePlan(plan.Id, now);
+        }
+
         await _publishService.SubmitAsync(listing, plan, cancellationToken);
+        return true;
+    }
+
+    /// <summary>
+    /// Ads whose plan period is running and can move to a higher plan: live ones, and ones whose
+    /// edit is in review or was sent back (their period keeps running meanwhile).
+    /// </summary>
+    public static bool IsUpgradable(Listing listing, DateTime now) =>
+        listing.Status is ListingStatus.Active or ListingStatus.ExpiringSoon
+        || (listing.Status is ListingStatus.PendingReview or ListingStatus.Draft && listing.HasRunningPlanPeriod(now));
+
+    private async Task<bool> TryUpgradeAsync(
+        Listing listing, Guid targetPlanId, PaymentVerificationResult verification, CancellationToken cancellationToken)
+    {
+        var plan = await _dbContext.PromotionPlans.FirstOrDefaultAsync(p => p.Id == targetPlanId, cancellationToken);
+        var current = listing.PromotionPlanId is { } currentId
+            ? await _dbContext.PromotionPlans.AsNoTracking().FirstOrDefaultAsync(p => p.Id == currentId, cancellationToken)
+            : null;
+        if (plan is null || plan.IsFree || (current is not null && plan.Price < current.Price))
+        {
+            _logger.LogWarning(
+                "Plan upgrade payment {Reference} confirmed but the upgrade is no longer valid; refunding it",
+                verification.Reference);
+            return false;
+        }
+
+        _publishService.ApplyPlanUpgrade(listing, plan);
         return true;
     }
 

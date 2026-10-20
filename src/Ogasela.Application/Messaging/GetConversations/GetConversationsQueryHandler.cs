@@ -33,7 +33,10 @@ public sealed class GetConversationsQueryHandler : IRequestHandler<GetConversati
             .Take(pageSize)
             .Select(c => new ConversationResponse(
                 c.Id, c.ListingId, c.BuyerId, c.SellerId, c.BuyerId == userId ? c.SellerId : c.BuyerId,
-                c.CreatedAt, c.LastMessageAt))
+                c.CreatedAt, c.LastMessageAt,
+                _dbContext.BlockedUsers.Any(b =>
+                    b.BlockerId == userId && b.BlockedId == (c.BuyerId == userId ? c.SellerId : c.BuyerId)),
+                _dbContext.Users.Any(u => u.Id == (c.BuyerId == userId ? c.SellerId : c.BuyerId) && u.DeletedAt != null)))
             .ToListAsync(cancellationToken);
 
         return Result.Success(new PagedConversationsResponse(items, page, pageSize, totalCount));

@@ -43,6 +43,11 @@ public class User
     /// <summary>When the user proved they own Phone (a code sent there by SMS). Null = unverified.</summary>
     public DateTime? PhoneVerifiedAt { get; private set; }
 
+    /// <summary>When the account was deleted (by the user, or erased by staff). Its chats stay readable but closed.</summary>
+    public DateTime? DeletedAt { get; private set; }
+
+    public bool IsDeleted => DeletedAt is not null;
+
     public bool IsEmailVerified => Email is not null && EmailVerifiedAt is not null;
 
     public bool IsPhoneVerified => Phone is not null && PhoneVerifiedAt is not null;
@@ -141,10 +146,12 @@ public class User
     /// NDPA data-subject deletion: clears every directly-identifying field. PasswordHash is
     /// replaced (rather than nulled) with a value no plaintext password can ever hash to, so the
     /// account is permanently unable to log in - Id/Role/CreatedAt are kept, since Transactions,
-    /// AuditLogs, etc. still reference this UserId for financial/audit history.
+    /// AuditLogs, etc. still reference this UserId for financial/audit history. DeletedAt keeps the
+    /// first deletion time if it's erased again.
     /// </summary>
-    public void Anonymize(string unusablePasswordHash)
+    public void Anonymize(string unusablePasswordHash, DateTime now)
     {
+        DeletedAt ??= now;
         Name = null;
         Phone = null;
         Email = null;

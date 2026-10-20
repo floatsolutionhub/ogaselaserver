@@ -12,13 +12,18 @@ public interface IPaymentGateway
     /// <summary>The name this gateway is selected/addressed by (e.g. in <c>Payments:Provider</c> and webhook routes).</summary>
     string ProviderName { get; }
 
-    /// <summary>Starts a checkout and returns a reference plus the URL to redirect the client to.</summary>
+    /// <summary>
+    /// Starts a checkout and returns a reference plus the URL to redirect the client to.
+    /// <paramref name="callbackUrl"/> is where the gateway sends the payer afterwards; null uses the
+    /// configured default (the website's payment result page, which hands back to the mobile app).
+    /// Callers must only pass a URL <see cref="IPaymentReturnUrlPolicy"/> allows.
+    /// </summary>
     Task<Result<PaymentInitialization>> InitializeTransactionAsync(
-        Guid sellerId, decimal amountKobo, string purpose, CancellationToken cancellationToken);
+        Guid sellerId, decimal amountKobo, string purpose, string? callbackUrl, CancellationToken cancellationToken);
 
     /// <summary>Like <see cref="InitializeTransactionAsync"/>, for a payer who isn't a seller (e.g. a buyer paying for an office pickup).</summary>
     Task<Result<PaymentInitialization>> InitializeCustomerTransactionAsync(
-        string customerEmail, decimal amountKobo, string purpose, CancellationToken cancellationToken);
+        string customerEmail, decimal amountKobo, string purpose, string? callbackUrl, CancellationToken cancellationToken);
 
     /// <summary>Asks the gateway directly whether a transaction succeeded - the source of truth a webhook's claim is checked against.</summary>
     Task<Result<PaymentVerificationResult>> VerifyTransactionAsync(string reference, CancellationToken cancellationToken);

@@ -42,16 +42,16 @@ public sealed class PaystackGateway : IPaymentGateway
     public string ProviderName => Name;
 
     public async Task<Result<PaymentInitialization>> InitializeTransactionAsync(
-        Guid sellerId, decimal amountKobo, string purpose, CancellationToken cancellationToken) =>
+        Guid sellerId, decimal amountKobo, string purpose, string? callbackUrl, CancellationToken cancellationToken) =>
         await InitializeCustomerTransactionAsync(
-            await ResolveSellerEmailAsync(sellerId, cancellationToken), amountKobo, purpose, cancellationToken);
+            await ResolveSellerEmailAsync(sellerId, cancellationToken), amountKobo, purpose, callbackUrl, cancellationToken);
 
     public async Task<Result<PaymentInitialization>> InitializeCustomerTransactionAsync(
-        string email, decimal amountKobo, string purpose, CancellationToken cancellationToken)
+        string email, decimal amountKobo, string purpose, string? callbackUrl, CancellationToken cancellationToken)
     {
         var reference = $"ogasela-{Guid.NewGuid():N}";
 
-        var payload = new InitializeRequest(email, (long)amountKobo, reference, _settings.CallbackUrl);
+        var payload = new InitializeRequest(email, (long)amountKobo, reference, callbackUrl ?? _settings.CallbackUrl);
 
         using var response = await _httpClient.PostAsJsonAsync("transaction/initialize", payload, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);

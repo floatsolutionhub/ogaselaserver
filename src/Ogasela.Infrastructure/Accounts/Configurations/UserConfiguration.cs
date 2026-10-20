@@ -21,6 +21,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.ProfilePhotoS3Key).HasMaxLength(500);
         builder.Property(u => u.SuspensionReason).HasMaxLength(500);
         builder.Ignore(u => u.IsSuspended);
+        builder.Ignore(u => u.IsDeleted);
         builder.Property(u => u.CreatedAt).IsRequired();
 
         builder.HasIndex(u => u.Phone).IsUnique().HasFilter("\"Phone\" IS NOT NULL");

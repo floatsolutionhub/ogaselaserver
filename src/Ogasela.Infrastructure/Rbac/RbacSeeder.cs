@@ -46,7 +46,8 @@ public static class RbacSeeder
         ("officepickup.refund", "OfficePickup", "Refund office pickup requests"),
         ("officepickup.setup", "OfficePickup", "Manage office pickup branches and eligible categories"),
         ("marketing.interest.view", "Marketing", "View waiting-list and tester signups"),
-        ("marketing.interest.manage", "Marketing", "Update, export and delete waiting-list and tester signups")
+        ("marketing.interest.manage", "Marketing", "Update, export and delete waiting-list and tester signups"),
+        ("marketing.testimonials.manage", "Marketing", "Add, edit, publish and delete homepage testimonials")
     ];
 
     public static async Task SeedAsync(IApplicationDbContext dbContext, CancellationToken cancellationToken)

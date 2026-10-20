@@ -24,16 +24,24 @@ public class Transaction
 
     public Guid? RelatedListingId { get; private set; }
 
+    /// <summary>
+    /// For a listing's plan payment: the plan it buys. Lets settlement tell a plan upgrade on a live
+    /// ad (the plan isn't switched until it's paid) from a first or renewal submission. Null on
+    /// older rows and on other kinds of transaction.
+    /// </summary>
+    public Guid? PromotionPlanId { get; private set; }
+
     public DateTime CreatedAt { get; private set; }
 
     /// <param name="relatedListingId">Set for a card payment of a listing's plan (a PlanPurchase through the gateway).</param>
     public static Transaction CreatePending(
         Guid sellerId, TransactionType type, decimal amountKobo, string gatewayReference, DateTime now,
-        Guid? relatedListingId = null)
+        Guid? relatedListingId = null, Guid? promotionPlanId = null)
     {
         return new Transaction
         {
             RelatedListingId = relatedListingId,
+            PromotionPlanId = promotionPlanId,
             Id = Guid.NewGuid(),
             SellerId = sellerId,
             Type = type,

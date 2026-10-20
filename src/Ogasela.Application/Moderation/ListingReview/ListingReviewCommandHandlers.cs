@@ -11,7 +11,10 @@ using Ogasela.Shared;
 
 namespace Ogasela.Application.Moderation.ListingReview;
 
-/// <summary>Approve: the listing goes Active now, and its plan's duration starts from this moment (not from submission).</summary>
+/// <summary>
+/// Approve: a fresh submission goes Active now and its plan's duration starts from this moment (not
+/// from submission). An approved edit of a live ad goes back Active on its existing plan period.
+/// </summary>
 public sealed class ApproveListingCommandHandler : IRequestHandler<ApproveListingCommand, Result>
 {
     private readonly IApplicationDbContext _dbContext;
@@ -54,7 +57,7 @@ public sealed class ApproveListingCommandHandler : IRequestHandler<ApproveListin
         }
 
         var now = _dateTime.UtcNow;
-        listing.Publish(now, now.AddDays(durationDays.Value));
+        listing.ApproveReview(now, durationDays.Value);
 
         await _auditLogger.LogAsync(
             _currentUser.UserId!.Value, "Listing.Approved", nameof(Listing), listing.Id,
@@ -112,8 +115,12 @@ public sealed class RejectListingCommandHandler : IRequestHandler<RejectListingC
         var now = _dateTime.UtcNow;
         var reason = request.Reason.Trim();
 
+        // Only a fresh submission (first time, or a renewal) was charged for this review. A rejected
+        // edit of a live ad isn't refunded: its plan is in use and keeps running.
+        var freshSubmission = listing.IsFreshSubmission;
+
         // The most recent successful plan charge for this listing is the one this submission made.
-        var charge = await _dbContext.Transactions
+        var charge = !freshSubmission ? null : await _dbContext.Transactions
             .Where(t => t.RelatedListingId == listing.Id
                 && t.Type == TransactionType.PlanPurchase
                 && t.Status == TransactionStatus.Success

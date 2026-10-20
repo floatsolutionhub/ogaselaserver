@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Ogasela.Api.Common;
 using Ogasela.Api.Contracts.Messaging;
 using Ogasela.Api.RateLimiting;
+using Ogasela.Application.Messaging.GetConversation;
 using Ogasela.Application.Messaging.GetConversations;
 using Ogasela.Application.Messaging.GetMessages;
 using Ogasela.Application.Messaging.GetSafetyNotice;
@@ -53,6 +54,11 @@ public sealed class ConversationsController : ControllerBase
     public async Task<IActionResult> GetUnreadCount(CancellationToken cancellationToken) =>
         (await _sender.Send(new GetUnreadMessageCountQuery(), cancellationToken)).ToActionResult(this);
 
+    /// <summary>One conversation the caller is a participant in, including whether the caller has blocked the other participant.</summary>
+    [HttpGet("api/v1/conversations/{id:guid}")]
+    public async Task<IActionResult> GetConversation(Guid id, CancellationToken cancellationToken) =>
+        (await _sender.Send(new GetConversationQuery(id), cancellationToken)).ToActionResult(this);
+
     /// <summary>Message history for a conversation the caller is a participant in.</summary>
     [HttpGet("api/v1/conversations/{id:guid}/messages")]
     public async Task<IActionResult> GetMessages(
@@ -63,7 +69,7 @@ public sealed class ConversationsController : ControllerBase
         return result.ToActionResult(this);
     }
 
-    /// <summary>Sends a message. Rejected only if the recipient has blocked the caller - the caller having blocked the recipient does not stop the caller's own outgoing messages (see UsersController.Block).</summary>
+    /// <summary>Sends a message. Rejected if either participant has blocked the other (see UsersController.Block).</summary>
     [HttpPost("api/v1/conversations/{id:guid}/messages")]
     [EnableRateLimiting(RateLimitingExtensions.MessagingPolicy)]
     public async Task<IActionResult> SendMessage(Guid id, SendMessageRequest request, CancellationToken cancellationToken)

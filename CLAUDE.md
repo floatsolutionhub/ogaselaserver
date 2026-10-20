@@ -302,3 +302,27 @@ point at the right store. `Consent` must be true - it's the NDPA lawful basis fo
 (`Admin/InterestSignups`, `/admin/interest-signups`): `marketing.interest.view` to read,
 `marketing.interest.manage` to change status/notes, export CSV (audited, formula-safe) or delete. Delete
 is a hard delete for erasure requests, and its audit entry deliberately omits the name and email.
+
+**Testimonials.** The homepage "Word on the street" section (OgaselaWebClient) reads `GET
+/testimonials` - published ones only, newest first, at most `TestimonialHandlers.MaxPublished` (6).
+Staff add, edit, publish/unpublish and delete them on the Control Portal's Testimonials page
+(`/admin/testimonials`, `marketing.testimonials.manage`). Creating one requires `ConsentConfirmed:
+true` - staff vouch the person is a real user who agreed to be quoted, stamped as `ConsentConfirmedAt`.
+Every change is audited; the delete entry omits the quote and name, since deleting is usually the
+person withdrawing consent. Code: `Application/Marketing/Testimonials`, `TestimonialsController`.
+
+**Deleted accounts keep their chats.** Deleting an account (`DELETE /me`, which runs the same
+`EraseUserDataCommand` as the portal's Data Erasure) anonymizes the user but never removes their
+`Conversation`s or `Message`s - everyone they did business with keeps the chat for reference. Their
+ads are taken down, not deleted, so the chat can still show what it was about. Don't add a cascade
+or cleanup that deletes chats on erasure; `AdminUsersTests` covers both deletion paths. Erasure stamps
+`User.DeletedAt` (backfilled for older erasures from their `User.DataErasure` audit entries). Such a chat is
+closed: `ConversationResponse.IsOtherParticipantDeleted` is true, sending fails with
+`Messaging.ParticipantDeleted` (409), and no new chat can be started with that account. The website and
+app show "This account was deleted" in place of the message box.
+
+**Control Portal notifications.** `GET /admin/pending-actions` (`Application/Admin/PendingActions`) counts
+the work waiting in each queue the caller can act on - the same role/permission the action endpoint
+needs (moderation queues: Moderator or SuperAdmin; the rest: their `perm:` key). The portal polls it
+every minute for the top-bar bell, sidebar badges, tab title and optional desktop alerts. Adding a queue:
+a key in `PendingActionKeys` + a count here, and its label/link in the portal's `lib/pendingActions.tsx`.

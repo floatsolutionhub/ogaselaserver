@@ -6,7 +6,8 @@ using Ogasela.Application.OfficePickups;
 
 namespace Ogasela.Api.Controllers.OfficePickups;
 
-public sealed record StartOfficePickupRequest(Guid ListingId, Guid BranchId);
+/// <summary>ReturnUrl: optional page the payment gateway sends the buyer back to - must be on Payments:AllowedReturnUrls.</summary>
+public sealed record StartOfficePickupRequest(Guid ListingId, Guid BranchId, string? ReturnUrl = null);
 
 public sealed record CancelOfficePickupRequest(string Reason);
 
@@ -40,7 +41,7 @@ public sealed class OfficePickupsController : ControllerBase
     /// <summary>Creates the request and returns the payment page URL. Confirm it when the page closes.</summary>
     [HttpPost]
     public async Task<IActionResult> Start(StartOfficePickupRequest request, CancellationToken cancellationToken) =>
-        (await _sender.Send(new StartOfficePickupCommand(request.ListingId, request.BranchId), cancellationToken)).ToActionResult(this);
+        (await _sender.Send(new StartOfficePickupCommand(request.ListingId, request.BranchId, request.ReturnUrl), cancellationToken)).ToActionResult(this);
 
     [HttpPost("{id:guid}/confirm-payment")]
     public async Task<IActionResult> ConfirmPayment(Guid id, CancellationToken cancellationToken) =>

@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using FluentAssertions;
 using Ogasela.Api.Contracts.Messaging;
 using Ogasela.Application.Accounts.GetCurrentUser;
+using Ogasela.Application.Messaging.GetBlockedUsers;
 using Ogasela.Application.Messaging.GetMessages;
 using Ogasela.Application.Messaging.SendMessage;
 using Ogasela.Application.Messaging.StartConversation;
@@ -106,6 +107,38 @@ public class MessagingFlowTests : IClassFixture<MessagingApiFactory>
             $"/api/v1/conversations/{conversation.Id}/messages", new SendMessageRequest("Are you there?", null));
 
         secondSend.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task BlockedUser_ShowsInTheBlockedList_AndChatReopensAfterUnblock()
+    {
+        var sellerClient = await RegisterAndVerifySellerAsync(_factory);
+        var listing = await CreateAndPublishFreeListingAsync(sellerClient, CategorySeedData.PhonesAndTabletsId);
+        var buyerClient = await RegisterSellerAsync(_factory);
+        var buyerId = await GetCurrentUserIdAsync(buyerClient);
+
+        var startResponse = await buyerClient.PostAsJsonAsync("/api/v1/conversations", new StartConversationRequest(listing.Id));
+        var conversation = await startResponse.Content.ReadFromJsonAsync<ConversationResponse>(JsonOptions);
+
+        (await sellerClient.PostAsync($"/api/v1/users/{buyerId}/block", content: null)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var blocked = await sellerClient.GetFromJsonAsync<List<BlockedUserResponse>>("/api/v1/users/blocked", JsonOptions);
+        blocked.Should().ContainSingle(b => b.UserId == buyerId);
+
+        var seen = await sellerClient.GetFromJsonAsync<ConversationResponse>($"/api/v1/conversations/{conversation!.Id}", JsonOptions);
+        seen!.IsBlockedByMe.Should().BeTrue();
+
+        // The blocker can't keep messaging someone they blocked either.
+        var blockerSend = await sellerClient.PostAsJsonAsync(
+            $"/api/v1/conversations/{conversation.Id}/messages", new SendMessageRequest("Hi", null));
+        blockerSend.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        (await sellerClient.DeleteAsync($"/api/v1/users/{buyerId}/block")).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var buyerSend = await buyerClient.PostAsJsonAsync(
+            $"/api/v1/conversations/{conversation.Id}/messages", new SendMessageRequest("Still available?", null));
+        buyerSend.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await sellerClient.GetFromJsonAsync<List<BlockedUserResponse>>("/api/v1/users/blocked", JsonOptions)).Should().BeEmpty();
     }
 
     private static async Task<Guid> GetCurrentUserIdAsync(HttpClient client)

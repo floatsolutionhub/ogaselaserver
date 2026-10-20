@@ -21,18 +21,22 @@ public sealed class FakePaymentGateway : IPaymentGateway
     public string ProviderName => "Paystack";
 
     public Task<Result<PaymentInitialization>> InitializeTransactionAsync(
-        Guid sellerId, decimal amountKobo, string purpose, CancellationToken cancellationToken)
+        Guid sellerId, decimal amountKobo, string purpose, string? callbackUrl, CancellationToken cancellationToken)
     {
         var reference = $"fake-{Guid.NewGuid():N}";
         _transactions[reference] = new PendingTransaction(amountKobo, Successful: true);
+        if (callbackUrl is not null) CallbackUrls[reference] = callbackUrl;
 
         return Task.FromResult(Result.Success(
             new PaymentInitialization(reference, $"https://fake-checkout.test/{reference}")));
     }
 
     public Task<Result<PaymentInitialization>> InitializeCustomerTransactionAsync(
-        string customerEmail, decimal amountKobo, string purpose, CancellationToken cancellationToken) =>
-        InitializeTransactionAsync(Guid.Empty, amountKobo, purpose, cancellationToken);
+        string customerEmail, decimal amountKobo, string purpose, string? callbackUrl, CancellationToken cancellationToken) =>
+        InitializeTransactionAsync(Guid.Empty, amountKobo, purpose, callbackUrl, cancellationToken);
+
+    /// <summary>The callback URL each checkout was started with (only those given one), for tests to assert on.</summary>
+    public ConcurrentDictionary<string, string> CallbackUrls { get; } = new();
 
     public Task<Result<PaymentVerificationResult>> VerifyTransactionAsync(string reference, CancellationToken cancellationToken)
     {

@@ -40,8 +40,8 @@ public class RejectListingCommandHandlerTests
         public IPaymentGateway GetActive() => this;
         public IPaymentGateway? GetByProviderName(string providerName) => this;
 
-        public Task<Result<PaymentInitialization>> InitializeTransactionAsync(Guid sellerId, decimal amountKobo, string purpose, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<Result<PaymentInitialization>> InitializeCustomerTransactionAsync(string customerEmail, decimal amountKobo, string purpose, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Result<PaymentInitialization>> InitializeTransactionAsync(Guid sellerId, decimal amountKobo, string purpose, string? callbackUrl, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Result<PaymentInitialization>> InitializeCustomerTransactionAsync(string customerEmail, decimal amountKobo, string purpose, string? callbackUrl, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<Result<PaymentVerificationResult>> VerifyTransactionAsync(string reference, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<Result> ProcessPartialRefundAsync(string transactionReference, decimal amountKobo, CancellationToken cancellationToken) => throw new NotSupportedException();
         public bool VerifyWebhookSignature(string rawBody, string? signatureHeaderValue) => throw new NotSupportedException();

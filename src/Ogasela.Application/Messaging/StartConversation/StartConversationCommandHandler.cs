@@ -57,9 +57,17 @@ public sealed class StartConversationCommandHandler : IRequestHandler<StartConve
             c => c.ListingId == request.ListingId && c.BuyerId == buyerId && c.SellerId == sellerUserId,
             cancellationToken);
 
+        var sellerDeleted = await _dbContext.Users.AnyAsync(u => u.Id == sellerUserId && u.DeletedAt != null, cancellationToken);
+
         if (existing is not null)
         {
-            return Result.Success(ToResponse(existing, buyerId));
+            // Reopening a deleted seller's chat still shows the history, closed.
+            return Result.Success(ToResponse(existing, buyerId, sellerDeleted));
+        }
+
+        if (sellerDeleted)
+        {
+            return Result.Failure<ConversationResponse>(MessagingErrors.ParticipantDeleted);
         }
 
         var conversation = Conversation.Start(request.ListingId, buyerId, sellerUserId, _dateTime.UtcNow);
@@ -69,15 +77,18 @@ public sealed class StartConversationCommandHandler : IRequestHandler<StartConve
         // Only a brand-new conversation counts - reopening an existing chat isn't a new lead.
         await _engagementTracker.RecordAsync([(listing.Id, listing.SellerId)], ListingEngagement.MessageStart, cancellationToken);
 
-        return Result.Success(ToResponse(conversation, buyerId));
+        return Result.Success(ToResponse(conversation, buyerId, false));
     }
 
-    private static ConversationResponse ToResponse(Conversation conversation, Guid currentUserId) => new(
+    private static ConversationResponse ToResponse(Conversation conversation, Guid currentUserId, bool sellerDeleted) => new(
         conversation.Id,
         conversation.ListingId,
         conversation.BuyerId,
         conversation.SellerId,
         conversation.GetOtherParticipant(currentUserId),
         conversation.CreatedAt,
-        conversation.LastMessageAt);
+        conversation.LastMessageAt,
+        // A block either way stops the conversation from being started or reopened above.
+        IsBlockedByMe: false,
+        IsOtherParticipantDeleted: sellerDeleted);
 }

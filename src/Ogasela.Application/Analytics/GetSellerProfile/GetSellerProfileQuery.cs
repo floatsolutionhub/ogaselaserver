@@ -19,7 +19,9 @@ public sealed record SellerProfileResponse(
     int ActiveAdCount,
     decimal AverageRating,
     int ReviewCount,
-    bool IsBusinessVerified = false);
+    bool IsBusinessVerified = false,
+    Guid UserId = default,
+    bool IsBlockedByMe = false);
 
 public sealed class GetSellerProfileQueryHandler : IRequestHandler<GetSellerProfileQuery, Result<SellerProfileResponse>>
 {
@@ -72,6 +74,9 @@ public sealed class GetSellerProfileQueryHandler : IRequestHandler<GetSellerProf
             activeAdCount,
             Math.Round(averageRating, 2),
             reviewCount,
-            seller.s.IsBusinessVerified));
+            seller.s.IsBusinessVerified,
+            seller.s.UserId,
+            await _dbContext.BlockedUsers.AnyAsync(
+                b => b.BlockerId == _currentUser.UserId && b.BlockedId == seller.s.UserId, cancellationToken)));
     }
 }

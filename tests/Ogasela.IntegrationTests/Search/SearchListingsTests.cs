@@ -3,7 +3,9 @@ using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.AspNetCore.WebUtilities;
 using Ogasela.Api.Contracts.Listings;
+using Ogasela.Application.Accounts.GetCurrentUser;
 using Ogasela.Application.Listings.GetListing;
+using Ogasela.Application.Listings.GetSellerListings;
 using Ogasela.Application.Search;
 using Ogasela.Domain.Listings;
 using Ogasela.Infrastructure.Promotions.Seed;
@@ -150,6 +152,34 @@ public class SearchListingsTests : IClassFixture<SearchApiFactory>
         seenIds.Should().HaveCount(totalListings, "every created listing should appear exactly once across the three pages");
         seenIds.Distinct().Should().HaveCount(totalListings, "no listing should be duplicated across pages");
         seenIds.Should().BeEquivalentTo(createdIds);
+    }
+
+    [Fact]
+    public async Task Search_HidesAdsFromSellersTheViewerBlocked_AndTheirStorefrontComesBackEmpty()
+    {
+        var sellerClient = await RegisterAndVerifySellerAsync(_factory);
+        const string token = "BlockMarkerK4";
+        var listing = await CreateAndPublishAsync(
+            sellerClient, CategorySeedData.PhonesAndTabletsId, PromotionPlanSeedData.FreeId,
+            $"{token} Used Phone", "A used phone in good condition.");
+        var sellerMe = await sellerClient.GetFromJsonAsync<CurrentUserResponse>("/api/v1/me", JsonOptions);
+
+        var viewerClient = await RegisterSellerAsync(_factory);
+        (await viewerClient.PostAsync($"/api/v1/users/{sellerMe!.Id}/block", content: null)).EnsureSuccessStatusCode();
+
+        var viewerPage = await viewerClient.GetFromJsonAsync<SearchResultPage>($"/api/v1/search?query={token}", JsonOptions);
+        viewerPage!.Items.Should().NotContain(i => i.Id == listing.Id);
+
+        var storefront = await viewerClient.GetFromJsonAsync<PagedListingsResponse>(
+            $"/api/v1/sellers/{listing.SellerId}/listings", JsonOptions);
+        storefront!.Items.Should().BeEmpty();
+
+        var detail = await viewerClient.GetFromJsonAsync<ListingDetailResponse>($"/api/v1/listings/{listing.Id}", JsonOptions);
+        detail!.Seller.IsBlockedByMe.Should().BeTrue();
+
+        // Everyone else still sees it.
+        var anonymousPage = await SearchAsync(new Dictionary<string, string?> { ["query"] = token });
+        anonymousPage.Items.Should().Contain(i => i.Id == listing.Id);
     }
 
     private async Task<ListingResponse> CreateAndPublishAsync(

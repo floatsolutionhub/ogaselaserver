@@ -16,7 +16,8 @@ public sealed record SearchQuery(
     bool VerifiedSellerOnly,
     SearchSortOption SortBy,
     int Page,
-    int PageSize)
+    int PageSize,
+    Guid? ViewerUserId = null)
 {
     public bool HasCoordinates => Latitude is not null && Longitude is not null;
 }

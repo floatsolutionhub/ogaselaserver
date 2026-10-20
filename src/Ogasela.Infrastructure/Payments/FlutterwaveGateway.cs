@@ -44,17 +44,17 @@ public sealed class FlutterwaveGateway : IPaymentGateway
     public string ProviderName => Name;
 
     public async Task<Result<PaymentInitialization>> InitializeTransactionAsync(
-        Guid sellerId, decimal amountKobo, string purpose, CancellationToken cancellationToken) =>
+        Guid sellerId, decimal amountKobo, string purpose, string? callbackUrl, CancellationToken cancellationToken) =>
         await InitializeCustomerTransactionAsync(
-            await ResolveSellerEmailAsync(sellerId, cancellationToken), amountKobo, purpose, cancellationToken);
+            await ResolveSellerEmailAsync(sellerId, cancellationToken), amountKobo, purpose, callbackUrl, cancellationToken);
 
     public async Task<Result<PaymentInitialization>> InitializeCustomerTransactionAsync(
-        string email, decimal amountKobo, string purpose, CancellationToken cancellationToken)
+        string email, decimal amountKobo, string purpose, string? callbackUrl, CancellationToken cancellationToken)
     {
         var reference = $"ogasela-{Guid.NewGuid():N}";
 
         var payload = new InitializeRequest(
-            reference, ToNaira(amountKobo), "NGN", _settings.RedirectUrl, new Customer(email));
+            reference, ToNaira(amountKobo), "NGN", callbackUrl ?? _settings.RedirectUrl, new Customer(email));
 
         using var response = await _httpClient.PostAsJsonAsync("payments", payload, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);

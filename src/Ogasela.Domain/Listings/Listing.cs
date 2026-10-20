@@ -183,11 +183,83 @@ public class Listing
         UpdatedAt = publishedAt;
     }
 
-    /// <summary>Passed every publish rule; now waits for a moderator. The plan's duration only starts once approved.</summary>
+    /// <summary>
+    /// A paid-for (or free) submission - first time, or renewing an expired ad - now waits for a
+    /// moderator. It starts a fresh plan period, so any old expiry date is dropped: the new one is
+    /// set when it's approved.
+    /// </summary>
     public void SubmitForReview(DateTime now)
     {
         Status = ListingStatus.PendingReview;
         ReviewNote = null;
+        ExpiresAt = null;
+        UpdatedAt = now;
+    }
+
+    /// <summary>
+    /// The ad has been live and its current plan period is still running (ExpiresAt is in the
+    /// future): an edit of it, or a fix after such an edit was rejected. Not a new period.
+    /// </summary>
+    public bool HasRunningPlanPeriod(DateTime now) => PublishedAt is not null && ExpiresAt is { } expiresAt && expiresAt > now;
+
+    /// <summary>
+    /// Awaiting review as a new plan period (first time, or a renewal) rather than as an edit of an
+    /// ad that has a period already: fresh submissions clear the expiry date, edits keep it.
+    /// </summary>
+    public bool IsFreshSubmission => ExpiresAt is null;
+
+    /// <summary>
+    /// A live ad was edited (or a rejected edit was fixed): it goes back to a moderator before
+    /// buyers see the changes. Its plan period keeps running - the expiry date doesn't move.
+    /// </summary>
+    public void SubmitEditForReview(DateTime now)
+    {
+        Status = ListingStatus.PendingReview;
+        ReviewNote = null;
+        UpdatedAt = now;
+    }
+
+    /// <summary>
+    /// Approved by a moderator. A fresh submission (no expiry yet) goes live and its plan period
+    /// starts now. An approved edit goes back live on its existing period - or Expired if that
+    /// ran out while it was being reviewed.
+    /// </summary>
+    public void ApproveReview(DateTime now, int planDurationDays)
+    {
+        if (ExpiresAt is not { } expiresAt)
+        {
+            Publish(now, now.AddDays(planDurationDays));
+            return;
+        }
+
+        Status = expiresAt <= now ? ListingStatus.Expired : ListingStatus.Active;
+        PublishedAt ??= now;
+        ReviewNote = null;
+        UpdatedAt = now;
+    }
+
+    /// <summary>
+    /// A paid plan change on an ad that has been live: the new plan takes effect immediately and
+    /// its full duration starts counting now - the old expiry date no longer applies.
+    /// </summary>
+    public void ChangePlanNow(Guid promotionPlanId, int planDurationDays, DateTime now)
+    {
+        PromotionPlanId = promotionPlanId;
+        ExpiresAt = now.AddDays(planDurationDays);
+        UpdatedAt = now;
+    }
+
+    /// <summary>Statuses a seller may delete from: not live, not sold.</summary>
+    public bool CanBeDeleted => Status is ListingStatus.Draft or ListingStatus.PendingReview or ListingStatus.Expired;
+
+    public void Delete(DateTime now)
+    {
+        if (!CanBeDeleted)
+        {
+            throw new InvalidOperationException($"A {Status} listing can't be deleted.");
+        }
+
+        Status = ListingStatus.Deleted;
         UpdatedAt = now;
     }
 

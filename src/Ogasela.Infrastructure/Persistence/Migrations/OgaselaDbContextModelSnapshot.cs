@@ -199,6 +199,9 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
@@ -790,6 +793,55 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                     b.ToTable("InterestSignups", (string)null);
                 });
 
+            modelBuilder.Entity("Ogasela.Domain.Marketing.Testimonial", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ConsentConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("Quote")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<int>("Rating")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsPublished", "CreatedAt");
+
+                    b.ToTable("Testimonials", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Testimonials_Rating", "\"Rating\" BETWEEN 1 AND 5");
+                        });
+                });
+
             modelBuilder.Entity("Ogasela.Domain.Messaging.BlockedUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1379,6 +1431,9 @@ namespace Ogasela.Infrastructure.Persistence.Migrations
                     b.Property<string>("GatewayReference")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("PromotionPlanId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("RelatedListingId")
                         .HasColumnType("uuid");

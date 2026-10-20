@@ -28,6 +28,11 @@ public sealed class BlockUserCommandHandler : IRequestHandler<BlockUserCommand, 
             return Result.Failure(MessagingErrors.CannotBlockSelf);
         }
 
+        if (!await _dbContext.Users.AnyAsync(u => u.Id == request.TargetUserId, cancellationToken))
+        {
+            return Result.Failure(MessagingErrors.UserNotFound);
+        }
+
         var alreadyBlocked = await _dbContext.BlockedUsers.AnyAsync(
             b => b.BlockerId == blockerId && b.BlockedId == request.TargetUserId, cancellationToken);
 

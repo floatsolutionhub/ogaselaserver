@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Ogasela.Api.Common;
 using Ogasela.Api.Contracts.Accounts;
+using Ogasela.Application.Accounts.DeleteMyAccount;
 using Ogasela.Application.Accounts.GetCurrentUser;
 using Ogasela.Application.Accounts.ProfileChanges;
 using Ogasela.Application.Accounts.SetPushToken;
@@ -32,6 +33,14 @@ public sealed class MeController : ControllerBase
         var result = await _sender.Send(new GetCurrentUserQuery(), cancellationToken);
         return result.ToActionResult(this);
     }
+
+    /// <summary>
+    /// Deletes the caller's own account immediately: their ads come down, personal data is erased
+    /// (same as the staff NDPA erasure) and every session and social sign-in is revoked. Irreversible.
+    /// </summary>
+    [HttpDelete]
+    public async Task<IActionResult> DeleteMyAccount(CancellationToken cancellationToken) =>
+        (await _sender.Send(new DeleteMyAccountCommand(), cancellationToken)).ToActionResult(this);
 
     /// <summary>Updates the display name. Phone, email and business info changes need approval - see change-requests below.</summary>
     [HttpPatch("profile")]

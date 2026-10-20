@@ -13,6 +13,9 @@ public static class AccountErrors
     public static readonly Error UserNotFound = new(
         "User.NotFound", "The user could not be found.");
 
+    public static readonly Error StaffCannotSelfDelete = new(
+        "User.StaffCannotSelfDelete", "Staff accounts can't be deleted from the app. Ask a SuperAdmin to offboard you.");
+
     public static readonly Error OtpInvalid = new(
         "Otp.InvalidCode", "The verification code is incorrect.");
 

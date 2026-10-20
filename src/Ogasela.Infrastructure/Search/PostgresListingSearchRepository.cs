@@ -79,6 +79,8 @@ public sealed class PostgresListingSearchRepository : IListingSearchRepository
                 AND (@condition IS NULL OR l."Condition" = @condition)
                 AND (@verifiedOnly = FALSE OR sp."VerificationStatus" = 'Verified')
                 AND (@location IS NULL OR l."Location" ILIKE '%' || @location || '%')
+                AND (@viewerId IS NULL OR NOT EXISTS (
+                    SELECT 1 FROM "BlockedUsers" b WHERE b."BlockerId" = @viewerId AND b."BlockedId" = sp."UserId"))
                 AND (
                     @radiusKm IS NULL OR @latitude IS NULL OR @longitude IS NULL
                     OR l."Latitude" IS NULL OR l."Longitude" IS NULL
@@ -128,6 +130,7 @@ public sealed class PostgresListingSearchRepository : IListingSearchRepository
             AddParameter(command, "condition", NpgsqlDbType.Text, query.Condition?.ToString());
             AddParameter(command, "verifiedOnly", NpgsqlDbType.Boolean, query.VerifiedSellerOnly);
             AddParameter(command, "location", NpgsqlDbType.Text, query.Location);
+            AddParameter(command, "viewerId", NpgsqlDbType.Uuid, query.ViewerUserId);
             AddParameter(command, "latitude", NpgsqlDbType.Numeric, query.Latitude);
             AddParameter(command, "longitude", NpgsqlDbType.Numeric, query.Longitude);
             AddParameter(command, "radiusKm", NpgsqlDbType.Numeric, query.RadiusKm);

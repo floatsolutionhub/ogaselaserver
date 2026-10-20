@@ -201,6 +201,8 @@ public static class DependencyInjection
     {
         services.Configure<PaystackSettings>(configuration.GetSection(PaystackSettings.SectionName));
         services.Configure<FlutterwaveSettings>(configuration.GetSection(FlutterwaveSettings.SectionName));
+        services.Configure<PaymentReturnUrlSettings>(configuration.GetSection(PaymentReturnUrlSettings.SectionName));
+        services.AddSingleton<IPaymentReturnUrlPolicy, PaymentReturnUrlPolicy>();
 
         // Both are registered as IPaymentGateway regardless of which is "active" - webhooks
         // are provider-specific by route and must be handled no matter which gateway

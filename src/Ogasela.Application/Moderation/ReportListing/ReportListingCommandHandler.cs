@@ -32,7 +32,7 @@ public sealed class ReportListingCommandHandler : IRequestHandler<ReportListingC
         var reporterId = _currentUser.UserId!.Value;
 
         var listing = await _dbContext.Listings
-            .Where(l => l.Id == request.ListingId && l.Status != ListingStatus.Draft && l.Status != ListingStatus.PendingReview)
+            .Where(l => l.Id == request.ListingId && l.Status != ListingStatus.Draft && l.Status != ListingStatus.PendingReview && l.Status != ListingStatus.Deleted)
             .Select(l => new { l.Id, l.SellerId })
             .FirstOrDefaultAsync(cancellationToken);
 

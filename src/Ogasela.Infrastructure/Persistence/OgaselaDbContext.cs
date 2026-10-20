@@ -118,6 +118,8 @@ public class OgaselaDbContext : DbContext, IApplicationDbContext
 
     public DbSet<InterestSignup> InterestSignups => Set<InterestSignup>();
 
+    public DbSet<Testimonial> Testimonials => Set<Testimonial>();
+
     public DbSet<AccountDeletionRequest> AccountDeletionRequests => Set<AccountDeletionRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

@@ -48,12 +48,26 @@ public sealed class SendMessageCommandHandler : IRequestHandler<SendMessageComma
 
         var recipientId = conversation.GetOtherParticipant(senderId);
 
+        // A deleted account's chats are kept for reference only - nobody is left to read new messages.
+        if (await _dbContext.Users.AnyAsync(u => u.Id == recipientId && u.DeletedAt != null, cancellationToken))
+        {
+            return Result.Failure<MessageResponse>(MessagingErrors.ParticipantDeleted);
+        }
+
         var blockedByRecipient = await _dbContext.BlockedUsers.AnyAsync(
             b => b.BlockerId == recipientId && b.BlockedId == senderId, cancellationToken);
 
         if (blockedByRecipient)
         {
             return Result.Failure<MessageResponse>(MessagingErrors.Blocked);
+        }
+
+        var senderBlockedRecipient = await _dbContext.BlockedUsers.AnyAsync(
+            b => b.BlockerId == senderId && b.BlockedId == recipientId, cancellationToken);
+
+        if (senderBlockedRecipient)
+        {
+            return Result.Failure<MessageResponse>(MessagingErrors.YouBlockedThisUser);
         }
 
         var now = _dateTime.UtcNow;

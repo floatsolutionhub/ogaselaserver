@@ -51,4 +51,5 @@ public sealed record ListingSellerSummary(
     string? StoreAddress,
     VerificationStatus VerificationStatus,
     DateTime MemberSince,
-    bool IsBusinessVerified = false);
+    bool IsBusinessVerified = false,
+    bool IsBlockedByMe = false);

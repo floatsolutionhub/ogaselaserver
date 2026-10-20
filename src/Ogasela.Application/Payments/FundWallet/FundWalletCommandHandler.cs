@@ -38,7 +38,7 @@ public sealed class FundWalletCommandHandler : IRequestHandler<FundWalletCommand
         var gateway = _gatewayResolver.GetActive();
 
         var initResult = await gateway.InitializeTransactionAsync(
-            sellerId, request.AmountKobo, "Ogasela wallet funding", cancellationToken);
+            sellerId, request.AmountKobo, "Ogasela wallet funding", null, cancellationToken);
 
         if (initResult.IsFailure)
         {

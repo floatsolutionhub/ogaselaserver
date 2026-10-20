@@ -1,8 +1,10 @@
 using FluentAssertions;
 using Ogasela.Application.Analytics;
 using Ogasela.Application.Listings.GetHotPicks;
+using Ogasela.Domain.Accounts;
 using Ogasela.Domain.Analytics;
 using Ogasela.Domain.Listings;
+using Ogasela.Domain.Messaging;
 using Ogasela.Domain.Promotions;
 using Ogasela.UnitTests.TestSupport;
 
@@ -22,7 +24,8 @@ public class GetHotPicksQueryHandlerTests
     private static readonly Guid Cars = Guid.NewGuid();
     private static readonly Guid Land = Guid.NewGuid();
 
-    private static (GetHotPicksQueryHandler Handler, TestApplicationDbContext Db, FakeDateTime Clock, PromotionPlan Plan) CreateSut()
+    private static (GetHotPicksQueryHandler Handler, TestApplicationDbContext Db, FakeDateTime Clock, PromotionPlan Plan) CreateSut(
+        Guid? viewerId = null)
     {
         var db = TestApplicationDbContext.Create();
         var clock = new FakeDateTime();
@@ -34,18 +37,36 @@ public class GetHotPicksQueryHandlerTests
         var plan = PromotionPlan.Create(Guid.NewGuid(), PromotionPlanName.Free, 7, 3, false, 0, 0m, AiToolTier.Basic, false, 0, true);
         db.PromotionPlans.Add(plan);
         db.SaveChanges();
-        return (new GetHotPicksQueryHandler(db, clock, new NoOpTracker()), db, clock, plan);
+        return (new GetHotPicksQueryHandler(db, clock, new NoOpTracker(), new FakeCurrentUserService { UserId = viewerId }), db, clock, plan);
     }
 
     private static Listing AddLive(
-        TestApplicationDbContext db, FakeDateTime clock, PromotionPlan plan, Guid categoryId, string title, string? location = null)
+        TestApplicationDbContext db, FakeDateTime clock, PromotionPlan plan, Guid categoryId, string title, string? location = null,
+        Guid? sellerProfileId = null)
     {
-        var listing = Listing.CreateDraft(Guid.NewGuid(), Guid.NewGuid(), categoryId, plan.Id, title, "A good item for sale",
+        var listing = Listing.CreateDraft(Guid.NewGuid(), sellerProfileId ?? Guid.NewGuid(), categoryId, plan.Id, title, "A good item for sale",
             1000m, ListingCondition.Used, ["https://example.com/a.jpg"], clock.UtcNow.AddDays(-3));
         if (location is not null) listing.SetLocation(location, null, null, clock.UtcNow);
         listing.Publish(clock.UtcNow.AddDays(-3), clock.UtcNow.AddDays(4));
         db.Listings.Add(listing);
         return listing;
+    }
+
+    [Fact]
+    public async Task Handle_LeavesOutAdsFromSellersTheViewerBlocked()
+    {
+        var viewerId = Guid.NewGuid();
+        var (handler, db, clock, plan) = CreateSut(viewerId);
+        var blockedSeller = SellerProfile.Create(Guid.NewGuid(), "Blocked Shop", null, null);
+        db.SellerProfiles.Add(blockedSeller);
+        db.BlockedUsers.Add(BlockedUser.Create(viewerId, blockedSeller.UserId, clock.UtcNow));
+        AddLive(db, clock, plan, Phones, "Blocked phone", sellerProfileId: blockedSeller.Id);
+        AddLive(db, clock, plan, Phones, "Other phone");
+        await db.SaveChangesAsync(CancellationToken.None);
+
+        var result = await handler.Handle(new GetHotPicksQuery(null, 1, 50, Seed: 1), CancellationToken.None);
+
+        result.Value.Items.Should().ContainSingle().Which.Title.Should().Be("Other phone");
     }
 
     [Fact]

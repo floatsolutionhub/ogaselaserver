@@ -63,6 +63,27 @@ public static class ListingErrors
     public static readonly Error PaymentNotFound = new(
         "Listing.PaymentNotFound", "We couldn't find that payment for this ad.");
 
+    public static readonly Error InvalidStatusForDelete = new(
+        "Listing.InvalidStatusForDelete", "Only a draft, rejected, pending or expired ad can be deleted.");
+
+    public static readonly Error ResubmitInstead = new(
+        "Listing.ResubmitInstead", "This ad's plan is still running. Resubmit your changes for review instead of paying again.");
+
+    public static readonly Error NothingToResubmit = new(
+        "Listing.NothingToResubmit", "Only an edited ad whose plan is still running can be resubmitted. Renew it with a plan instead.");
+
+    public static readonly Error NotLive = new(
+        "Listing.NotLive", "Only an ad that's live (or being edited while its plan is running) can change plan.");
+
+    public static readonly Error PlanDowngradeNotAllowed = new(
+        "Listing.PlanDowngradeNotAllowed", "A live ad's plan can't be downgraded. Choose a plan at least as high as your current one.");
+
+    public static readonly Error SamePlan = new(
+        "Listing.SamePlan", "Your ad is already on that plan.");
+
+    public static readonly Error PlanChangeNotAllowedInEdit = new(
+        "Listing.PlanChangeNotAllowedInEdit", "To change a live ad's plan, upgrade it with a plan payment.");
+
     public static readonly Error UnsupportedImage = new(
         "Listing.UnsupportedImage", "That photo's format isn't supported. Use a JPEG, PNG or WebP photo.");
 }

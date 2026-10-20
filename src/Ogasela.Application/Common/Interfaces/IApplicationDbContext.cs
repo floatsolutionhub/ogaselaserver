@@ -111,6 +111,8 @@ public interface IApplicationDbContext
 
     DbSet<InterestSignup> InterestSignups { get; }
 
+    DbSet<Testimonial> Testimonials { get; }
+
     DbSet<AccountDeletionRequest> AccountDeletionRequests { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);

@@ -43,4 +43,12 @@ public sealed record UpdateListingRequest(
 
 public sealed record UploadListingImageRequest(IFormFile Image);
 
-public sealed record ListingCheckoutRequest(Guid PromotionPlanId, Ogasela.Application.Listings.Checkout.ListingPaymentMethod PaymentMethod);
+/// <summary>ReturnUrl: optional page the payment gateway sends the payer back to - must be on Payments:AllowedReturnUrls.</summary>
+public sealed record ListingCheckoutRequest(
+    Guid PromotionPlanId, Ogasela.Application.Listings.Checkout.ListingPaymentMethod PaymentMethod, string? ReturnUrl = null);
+
+/// <summary>Moves a running ad onto a higher plan for its full price. ReturnUrl: as for checkout.</summary>
+public sealed record PlanUpgradeRequest(
+    Guid PromotionPlanId,
+    Ogasela.Application.Listings.Checkout.ListingPaymentMethod PaymentMethod = Ogasela.Application.Listings.Checkout.ListingPaymentMethod.Card,
+    string? ReturnUrl = null);

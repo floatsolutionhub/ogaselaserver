@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Ogasela.Application.Common.Interfaces;
 using Ogasela.Application.Listings.GetListing;
+using Ogasela.Application.Messaging;
 using Ogasela.Domain.Listings;
 using Ogasela.Shared;
 
@@ -23,7 +24,14 @@ public sealed class GetSellerListingsQueryHandler : IRequestHandler<GetSellerLis
         var page = Math.Max(1, request.Page);
         var pageSize = Math.Clamp(request.PageSize, 1, 100);
 
-        var query = _dbContext.Listings.Where(l => l.SellerId == request.SellerId);
+        // A seller the viewer blocked shows an empty storefront.
+        if (await _dbContext.ProfileIdsBlockedBy(_currentUser.UserId).ContainsAsync(request.SellerId, cancellationToken))
+        {
+            return Result.Success(new PagedListingsResponse([], page, pageSize, 0));
+        }
+
+        // Deleted ads are gone for everyone, their seller included.
+        var query = _dbContext.Listings.Where(l => l.SellerId == request.SellerId && l.Status != ListingStatus.Deleted);
 
         if (!await IsSameSellerAsync(request.SellerId, cancellationToken))
         {

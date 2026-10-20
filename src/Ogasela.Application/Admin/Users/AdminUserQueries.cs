@@ -13,7 +13,10 @@ public enum AdminUserStatusFilter
 {
     All,
     Active,
-    Suspended
+    Suspended,
+
+    /// <summary>Has an ID or address document waiting for staff review.</summary>
+    DocumentsPending
 }
 
 /// <summary>Every app user (Buyers and Sellers - staff are managed on the Staff page), newest first, filterable.</summary>
@@ -123,6 +126,8 @@ public sealed class AdminUserQueryHandlers :
         {
             AdminUserStatusFilter.Active => users.Where(u => u.SuspendedAt == null),
             AdminUserStatusFilter.Suspended => users.Where(u => u.SuspendedAt != null),
+            AdminUserStatusFilter.DocumentsPending => users.Where(u =>
+                _dbContext.UserDocuments.Any(d => d.UserId == u.Id && d.Status == UserDocumentStatus.PendingReview)),
             _ => users
         };
 

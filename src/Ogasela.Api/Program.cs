@@ -4,6 +4,7 @@ using Hangfire;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authorization;
 using Ogasela.Api.Authorization;
@@ -84,6 +85,28 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddApiRateLimiting(builder.Configuration);
+
+// Behind nginx - and, for web traffic, OgaselaWebClient's server - every request reaches the API
+// from a proxy's address, so per-IP rate limits (and logs) would lump all users together. Trust
+// X-Forwarded-For/-Proto only from the proxies listed in ForwardedHeaders:KnownProxies (IPs) or
+// ForwardedHeaders:KnownNetworks (CIDR, e.g. "10.0.0.0/8"); a client sending its own header from
+// anywhere else is ignored. Nothing listed (the default) means the headers are never trusted.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownProxies.Clear();
+    options.KnownIPNetworks.Clear();
+    // Unwrap as many hops as there are trusted proxies (nginx, then the web client's server).
+    options.ForwardLimit = null;
+    foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+    {
+        if (System.Net.IPAddress.TryParse(proxy.Trim(), out var address)) options.KnownProxies.Add(address);
+    }
+    foreach (var network in builder.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? [])
+    {
+        if (System.Net.IPNetwork.TryParse(network.Trim(), out var parsed)) options.KnownIPNetworks.Add(parsed);
+    }
+});
 
 // For OgaselaControlPortalUI (and any other browser-based client) - the API is called with a
 // bearer token, not cookies, so credentials aren't needed here. Origins come from config
@@ -245,6 +268,7 @@ app.UseSwaggerUI(options =>
     options.DocumentTitle = "Ogasela API - Bira Docs";
 });
 
+app.UseForwardedHeaders();
 app.UseCorrelationId();
 
 app.UseHttpsRedirection();
