@@ -30,10 +30,10 @@ public sealed class CreateCityCommandHandler : IRequestHandler<CreateCityCommand
             return Result.Failure<CityResponse>(GeoErrors.CityNameTaken);
         }
 
-        var city = NigeriaCity.Create(request.StateId, request.Name);
+        var city = NigeriaCity.Create(request.StateId, request.Name, request.Latitude, request.Longitude);
         _dbContext.NigeriaCities.Add(city);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return Result.Success(new CityResponse(city.Id, city.StateId, city.Name, city.CreatedAt));
+        return Result.Success(CityResponse.From(city));
     }
 }

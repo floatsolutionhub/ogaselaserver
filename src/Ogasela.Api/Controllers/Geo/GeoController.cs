@@ -9,6 +9,7 @@ using Ogasela.Application.Geo.DeleteCity;
 using Ogasela.Application.Geo.DeleteState;
 using Ogasela.Application.Geo.GetCitiesByState;
 using Ogasela.Application.Geo.GetCity;
+using Ogasela.Application.Geo.GetNearestCity;
 using Ogasela.Application.Geo.GetState;
 using Ogasela.Application.Geo.GetStates;
 using Ogasela.Application.Geo.UpdateCity;
@@ -52,6 +53,18 @@ public sealed class GeoController : ControllerBase
         return result.ToActionResult(this);
     }
 
+    /// <summary>
+    /// The seeded city closest to a device's position - fills in state and city from "use my location".
+    /// <c>state</c> is the state the device says it's in, when it knows (narrows the search to it).
+    /// </summary>
+    [HttpGet("cities/nearest")]
+    public async Task<IActionResult> GetNearestCity(
+        [FromQuery] decimal latitude, [FromQuery] decimal longitude, [FromQuery] string? state, CancellationToken cancellationToken)
+    {
+        var result = await _sender.Send(new GetNearestCityQuery(latitude, longitude, state), cancellationToken);
+        return result.ToActionResult(this);
+    }
+
     [HttpGet("cities/{cityId:guid}")]
     public async Task<IActionResult> GetCity(Guid cityId, CancellationToken cancellationToken)
     {
@@ -87,7 +100,7 @@ public sealed class GeoController : ControllerBase
     [Authorize(Policy = "perm:geo.city.manage")]
     public async Task<IActionResult> CreateCity(CreateCityRequest request, CancellationToken cancellationToken)
     {
-        var result = await _sender.Send(new CreateCityCommand(request.StateId, request.Name), cancellationToken);
+        var result = await _sender.Send(new CreateCityCommand(request.StateId, request.Name, request.Latitude, request.Longitude), cancellationToken);
         return result.ToActionResult(this);
     }
 
@@ -95,7 +108,7 @@ public sealed class GeoController : ControllerBase
     [Authorize(Policy = "perm:geo.city.manage")]
     public async Task<IActionResult> UpdateCity(Guid id, UpdateCityRequest request, CancellationToken cancellationToken)
     {
-        var result = await _sender.Send(new UpdateCityCommand(id, request.Name), cancellationToken);
+        var result = await _sender.Send(new UpdateCityCommand(id, request.Name, request.Latitude, request.Longitude), cancellationToken);
         return result.ToActionResult(this);
     }
 

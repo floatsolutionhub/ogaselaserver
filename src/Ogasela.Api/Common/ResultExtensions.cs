@@ -157,6 +157,7 @@ public static class ResultExtensions
             "Geo.StateNameOrCodeTaken" => StatusCodes.Status409Conflict,
             "Geo.CityNotFound" => StatusCodes.Status404NotFound,
             "Geo.CityNameTaken" => StatusCodes.Status409Conflict,
+            "Geo.NoCityNearby" => StatusCodes.Status404NotFound,
             "Staff.NotFound" => StatusCodes.Status404NotFound,
             "Staff.UserNotFound" => StatusCodes.Status404NotFound,
             "Staff.DepartmentNotFound" => StatusCodes.Status404NotFound,

@@ -15,4 +15,7 @@ public static class GeoErrors
 
     public static readonly Error CityNameTaken = new(
         "Geo.CityNameTaken", "A city with this name already exists in this state.");
+
+    public static readonly Error NoCityNearby = new(
+        "Geo.NoCityNearby", "We couldn't find a city near you. Choose your state and city instead.");
 }

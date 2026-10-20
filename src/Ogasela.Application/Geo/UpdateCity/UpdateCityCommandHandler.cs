@@ -29,9 +29,9 @@ public sealed class UpdateCityCommandHandler : IRequestHandler<UpdateCityCommand
             return Result.Failure<CityResponse>(GeoErrors.CityNameTaken);
         }
 
-        city.Update(request.Name);
+        city.Update(request.Name, request.Latitude, request.Longitude);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return Result.Success(new CityResponse(city.Id, city.StateId, city.Name, city.CreatedAt));
+        return Result.Success(CityResponse.From(city));
     }
 }

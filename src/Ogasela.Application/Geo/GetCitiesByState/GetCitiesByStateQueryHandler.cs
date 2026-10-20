@@ -25,7 +25,7 @@ public sealed class GetCitiesByStateQueryHandler : IRequestHandler<GetCitiesBySt
         var cities = await _dbContext.NigeriaCities
             .Where(c => c.StateId == request.StateId)
             .OrderBy(c => c.Name)
-            .Select(c => new CityResponse(c.Id, c.StateId, c.Name, c.CreatedAt))
+            .Select(c => new CityResponse(c.Id, c.StateId, c.Name, c.Latitude, c.Longitude, c.CreatedAt))
             .ToListAsync(cancellationToken);
 
         return Result.Success<IReadOnlyList<CityResponse>>(cities);

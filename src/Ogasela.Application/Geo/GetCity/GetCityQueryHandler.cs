@@ -22,6 +22,6 @@ public sealed class GetCityQueryHandler : IRequestHandler<GetCityQuery, Result<C
             return Result.Failure<CityResponse>(GeoErrors.CityNotFound);
         }
 
-        return Result.Success(new CityResponse(city.Id, city.StateId, city.Name, city.CreatedAt));
+        return Result.Success(CityResponse.From(city));
     }
 }

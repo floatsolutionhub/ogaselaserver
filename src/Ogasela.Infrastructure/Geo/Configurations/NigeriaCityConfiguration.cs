@@ -13,6 +13,8 @@ public sealed class NigeriaCityConfiguration : IEntityTypeConfiguration<NigeriaC
         builder.HasKey(c => c.Id);
 
         builder.Property(c => c.Name).HasMaxLength(150).IsRequired();
+        builder.Property(c => c.Latitude).HasPrecision(9, 6);
+        builder.Property(c => c.Longitude).HasPrecision(9, 6);
         builder.Property(c => c.CreatedAt).IsRequired();
 
         builder.HasIndex(c => c.StateId);
